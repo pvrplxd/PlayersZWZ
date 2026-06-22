@@ -1,0 +1,34 @@
+name: gps_tracker
+description: "Real-time multiplayer radar tracking — PLAYERSZWZ"
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Map rendering — OpenStreetMap tiles, 100% free, no API key
+  flutter_map: ^7.0.2
+
+  # Coordinate model used by flutter_map
+  latlong2: ^0.9.1
+
+  # GPS position stream
+  geolocator: ^12.0.0
+
+  # HTTP calls to Cloudflare Worker
+  http: ^1.2.2
+
+  # Material icons
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
