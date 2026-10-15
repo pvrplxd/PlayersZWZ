@@ -89,8 +89,8 @@ The GPS demo may require location permission and its configured tracking service
 - [Phase 2 RS Documentation](docs/phase-02/RS-Documentation-02.pdf)
 - [Phase 2 presentation](docs/phase-02/phase-02-presentation.pdf)
 - [UI prototype images](docs/phase-02/ui-designs/)
-- [Initial proposal](docs/proposal/idea-proposal.pdf)
-- [Proposal presentation](docs/proposal/idea-proposal-presentation.pdf)
+- [Initial proposal](docs/proposal/project-proposal.pdf)
+- [Proposal presentation](docs/proposal/proposal-presentation.pdf)
 - [Software design project report](docs/phase-02/Software-Design-Documentation.docx)
 
 ## 🧑‍🤝‍🧑 Team
