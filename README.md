@@ -6,8 +6,8 @@
 
 **A university Final Year Project exploring personalized sports matchmaking and nearby event discovery.**
 
-[![Project](https://img.shields.io/badge/University%20FYP-PlayersZWZ-6C5CE7?style=for-the-badge)](https://github.com/pvrplxd/PlayersZWZ)
-[![Flutter demos](https://img.shields.io/badge/Flutter-Demo%20apps-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![University FYP](https://img.shields.io/badge/University%20FYP-PlayersZWZ-6C5CE7?style=for-the-badge)](docs/proposal/project-proposal.pdf)
+[![Flutter demos](https://img.shields.io/badge/Flutter-Demo%20apps-02569B?style=for-the-badge&logo=flutter&logoColor=white)](prototypes/)
 [![Stage](https://img.shields.io/badge/Stage-Design%20%26%20proof%20of%20concept-00A884?style=for-the-badge)](#-what-is-in-this-repository)
 
 </div>
@@ -36,14 +36,13 @@ The longer-term design also explores recommendations, notifications, and player 
 
 | Folder | What you will find |
 | --- | --- |
-| [`fyp-proposal/`](fyp-proposal/) | Initial project proposal and proposal presentation |
-| [`fyp-i/phase-01/`](fyp-i/phase-01/) | Phase 1 project report |
-| [`fyp-i/phase-02/docs/`](fyp-i/phase-02/docs/) | Phase 2 report, presentation, and UI design images |
-| [`fyp-i/phase-02/app-tests/frontend_prototype/`](fyp-i/phase-02/app-tests/frontend_prototype/) | Click-through Flutter UI prototype |
-| [`fyp-i/phase-02/app-tests/gps_tracker/`](fyp-i/phase-02/app-tests/gps_tracker/) | Flutter proof of concept for live GPS tracking |
-| [`fyp-i/sdp-report.docx`](fyp-i/sdp-report.docx) | Software design project report |
+| [`docs/proposal/`](docs/proposal/) | Initial project proposal and proposal presentation |
+| [`docs/phase-01/`](docs/phase-01/) | Phase 1 requirements documentation |
+| [`docs/phase-02/`](docs/phase-02/) | Phase 2 requirements and software design documentation, presentation, and UI designs |
+| [`prototypes/ui-prototype/`](prototypes/ui-prototype/) | Click-through Flutter UI prototype |
+| [`prototypes/gps-tracker/`](prototypes/gps-tracker/) | Flutter proof of concept for live GPS tracking |
 
-The folder is currently named `app-tests` because these apps were created to demonstrate and test ideas. They are **demo/prototype apps**, not an automated test suite.
+The prototypes are demonstration apps, not an automated test suite. When the production code is added to this repository, it can live in `apps/mobile/` and `services/api/`. Automated tests should live with the component they test—for example, `apps/mobile/test/` or `services/api/tests/`.
 
 ## 🗺️ Product architecture
 
@@ -65,19 +64,20 @@ You need the [Flutter SDK](https://docs.flutter.dev/get-started/install) and a c
 
 ### UI prototype
 
+From the repository root:
+
 ```bash
-git clone https://github.com/pvrplxd/PlayersZWZ.git
-cd PlayersZWZ/fyp-i/phase-02/app-tests/frontend_prototype
+cd prototypes/ui-prototype
 flutter pub get
 flutter run
 ```
 
 ### GPS-tracking proof of concept
 
-From the repository root, open a separate terminal and run:
+From the repository root:
 
 ```bash
-cd fyp-i/phase-02/app-tests/gps_tracker
+cd prototypes/gps-tracker
 flutter pub get
 flutter run
 ```
@@ -86,13 +86,13 @@ The GPS demo may require location permission and its configured tracking service
 
 ## 📚 Project documents
 
-- [Phase 1 report](fyp-i/phase-01/phase-01-src.pdf)
-- [Phase 2 report](fyp-i/phase-02/docs/phase-02-srs.pdf)
-- [Phase 2 presentation](fyp-i/phase-02/docs/phase-02-presentation.pdf)
-- [UI prototype images](fyp-i/phase-02/docs/ui-prototypes/)
-- [Initial proposal](fyp-proposal/idea-proposal.pdf)
-- [Proposal presentation](fyp-proposal/idea-proposal-presentation.pdf)
-- [Software design project report](fyp-i/sdp-report.docx)
+- [Phase 1 requirements documentation (RS-Documentation-01)](docs/phase-01/RS-Documentation-01.pdf)
+- [Phase 2 requirements documentation (RS-Documentation-02)](docs/phase-02/RS-Documentation-02.pdf)
+- [Phase 2 presentation](docs/phase-02/phase-02-presentation.pdf)
+- [Software design documentation](docs/phase-02/Software-Design-Documentation.docx)
+- [UI prototype designs](docs/phase-02/ui-designs/)
+- [Initial project proposal](docs/proposal/project-proposal.pdf)
+- [Proposal presentation](docs/proposal/proposal-presentation.pdf)
 
 ## 🧑‍🤝‍🧑 Team
 
