@@ -1,10 +1,9 @@
 # PlayersZWZ — Implementation Plan
 
 > **AI-Powered Sports Matchmaking & Arena Booking Application** · BSCS Final Year Project · Group S26CS024 · University of Central Punjab
-> Product Owner: Mr. Asif Farooq · Team: Waleed Abid, Afaq Ul Islam, Hassan Ahmed
-> Plan version: 2.0 · Last checked against Jira and the SRS/SDS: 15 October 2026
-
-This is the working build guide for the team. It turns the Phase 1 SRS (v1.2) and Phase 2 SDS (v2.0) into a practical build sequence. Read **Section 1 (Prerequisites)** before writing any code. Sections marked **[Proposed]** are additions or clarifications that are not yet in the SDS; confirm them in Sprint 1 and record them as SDS revisions.
+> **Advisor:** Mr. Asif Farooq
+> **Team:** Waleed Abid, Afaq Ul Islam, Hassan Ahmed
+> **Plan version:** 2.0 · Last checked against Jira and the SRS/SDS: 15 October 2026
 
 ---
 
@@ -621,7 +620,3 @@ Build toward this order first; it shows the core value before arenas, moderation
 6. Player receives an in-app or push notification.
 
 Then extend the demo with: request an arena booking → approval → post-game rating → admin moderation → recommendation feed.
-
----
-
-*Source documents: `PlayersZWZ - Phase 01.pdf` (SRS v1.2) and `PlayersZWZ - Phase - 02.pdf` (SDS v2.0), both in `docs/`.*
