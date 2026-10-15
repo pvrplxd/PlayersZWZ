@@ -36,15 +36,14 @@ The longer-term design also explores recommendations, notifications, and player 
 
 | Folder | What you will find |
 | --- | --- |
-| [`docs/proposal/`](docs/proposal/) | Initial project proposal and proposal presentation |
-| [`docs/phase-01/`](docs/phase-01/) | Phase 1 project report |
-| [`docs/phase-02/`](docs/phase-02/) | Phase 2 RS Documentation, presentation, and UI design images |
-| [`prototypes/ui-prototype/`](prototypes/ui-prototype/) | Click-through Flutter UI prototype |
+| [`docs/proposal/`](docs/proposal/) | Initial proposal and proposal presentation |
+| [`docs/phase-01/`](docs/phase-01/) | Phase 1 RS Documentation |
+| [`docs/phase-02/`](docs/phase-02/) | Phase 2 RS Documentation, presentation, and software design documentation |
+| [`docs/phase-02/ui-designs/`](docs/phase-02/ui-designs/) | UI design screenshots |
 | [`prototypes/gps-tracker/`](prototypes/gps-tracker/) | Flutter proof of concept for live GPS tracking |
-| [`docs/phase-02/Software-Design-Documentation.docx`](docs/phase-02/Software-Design-Documentation.docx) | Software design project report |
+| [`prototypes/ui-prototype/`](prototypes/ui-prototype/) | Click-through Flutter UI prototype |
 
-The folder is currently named `app-tests` because these apps were created to demonstrate and test ideas. They are **demo/prototype apps**, not an automated test suite.
-
+The two folders under `prototypes/` are demonstration apps: one validates live GPS tracking, and the other shows the planned user interface. They are not an automated test suite.
 ## 🗺️ Product architecture
 
 The design documents describe this planned system. The production app and backend are not included in the current repository snapshot.
@@ -90,8 +89,8 @@ The GPS demo may require location permission and its configured tracking service
 - [Phase 2 RS Documentation](docs/phase-02/RS-Documentation-02.pdf)
 - [Phase 2 presentation](docs/phase-02/phase-02-presentation.pdf)
 - [UI prototype images](docs/phase-02/ui-designs/)
-- [Initial proposal](docs/proposal/idea-proposal.pdf)
-- [Proposal presentation](docs/proposal/idea-proposal-presentation.pdf)
+- [Initial proposal](docs/proposal/project-proposal.pdf)
+- [Proposal presentation](docs/proposal/proposal-presentation.pdf)
 - [Software design project report](docs/phase-02/Software-Design-Documentation.docx)
 
 ## 🧑‍🤝‍🧑 Team
