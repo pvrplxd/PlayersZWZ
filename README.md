@@ -36,12 +36,12 @@ The longer-term design also explores recommendations, notifications, and player 
 
 | Folder | What you will find |
 | --- | --- |
-| [`fyp-proposal/`](fyp-proposal/) | Initial project proposal and proposal presentation |
-| [`fyp-i/phase-01/`](fyp-i/phase-01/) | Phase 1 project report |
-| [`fyp-i/phase-02/docs/`](fyp-i/phase-02/docs/) | Phase 2 report, presentation, and UI design images |
-| [`fyp-i/phase-02/app-tests/frontend_prototype/`](fyp-i/phase-02/app-tests/frontend_prototype/) | Click-through Flutter UI prototype |
-| [`fyp-i/phase-02/app-tests/gps_tracker/`](fyp-i/phase-02/app-tests/gps_tracker/) | Flutter proof of concept for live GPS tracking |
-| [`fyp-i/sdp-report.docx`](fyp-i/sdp-report.docx) | Software design project report |
+| [`docs/proposal/`](docs/proposal/) | Initial project proposal and proposal presentation |
+| [`docs/phase-01/`](docs/phase-01/) | Phase 1 project report |
+| [`docs/phase-02/`](docs/phase-02/) | Phase 2 RS Documentation, presentation, and UI design images |
+| [`prototypes/ui-prototype/`](prototypes/ui-prototype/) | Click-through Flutter UI prototype |
+| [`prototypes/gps-tracker/`](prototypes/gps-tracker/) | Flutter proof of concept for live GPS tracking |
+| [`docs/phase-02/Software-Design-Documentation.docx`](docs/phase-02/Software-Design-Documentation.docx) | Software design project report |
 
 The folder is currently named `app-tests` because these apps were created to demonstrate and test ideas. They are **demo/prototype apps**, not an automated test suite.
 
@@ -86,13 +86,13 @@ The GPS demo may require location permission and its configured tracking service
 
 ## 📚 Project documents
 
-- [Phase 1 report](fyp-i/phase-01/phase-01-src.pdf)
-- [Phase 2 report](fyp-i/phase-02/docs/phase-02-srs.pdf)
-- [Phase 2 presentation](fyp-i/phase-02/docs/phase-02-presentation.pdf)
-- [UI prototype images](fyp-i/phase-02/docs/ui-prototypes/)
-- [Initial proposal](fyp-proposal/idea-proposal.pdf)
-- [Proposal presentation](fyp-proposal/idea-proposal-presentation.pdf)
-- [Software design project report](fyp-i/sdp-report.docx)
+- [Phase 1 RS Documentation](docs/phase-01/RS-Documentation-01.pdf)
+- [Phase 2 RS Documentation](docs/phase-02/RS-Documentation-02.pdf)
+- [Phase 2 presentation](docs/phase-02/phase-02-presentation.pdf)
+- [UI prototype images](docs/phase-02/ui-designs/)
+- [Initial proposal](docs/proposal/idea-proposal.pdf)
+- [Proposal presentation](docs/proposal/idea-proposal-presentation.pdf)
+- [Software design project report](docs/phase-02/Software-Design-Documentation.docx)
 
 ## 🧑‍🤝‍🧑 Team
 
