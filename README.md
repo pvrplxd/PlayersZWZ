@@ -67,7 +67,7 @@ You need the [Flutter SDK](https://docs.flutter.dev/get-started/install) and a c
 
 ```bash
 git clone https://github.com/pvrplxd/PlayersZWZ.git
-cd PlayersZWZ/fyp-i/phase-02/app-tests/frontend_prototype
+cd PlayersZWZ/prototypes/ui-prototype
 flutter pub get
 flutter run
 ```
@@ -77,7 +77,7 @@ flutter run
 From the repository root, open a separate terminal and run:
 
 ```bash
-cd fyp-i/phase-02/app-tests/gps_tracker
+cd prototypes/gps-tracker
 flutter pub get
 flutter run
 ```
