@@ -39,7 +39,7 @@ Nobody should start a feature until the items marked **Blocker** are done. Items
 | P-01 | **GitHub repository** with `main` and `develop` branches, all three members added | Shared code, PR reviews, CI | All | Sprint 1 |
 | P-02 | **Jira SCRUM board** access (all members) | Branch/PR linking to issues, e.g. `SCRUM-12` | All | Sprint 1 |
 | P-03 | **Firebase project** (e.g. `playerszwz-dev`) on a Google account the whole team can access | Auth, Firestore, FCM | All | Sprint 1 |
-| P-04 | **Google Cloud project** linked to the Firebase project, **billing enabled** | Google Maps Platform will not issue working keys without a billing account (a free monthly credit applies, but a card is required) | Afaq, Waleed | Sprint 1 map work |
+| P-04 | **Geoapify account and API key** | Map tiles, Places, and geocoding for mobile map/location flows | Afaq | Sprint 1 map work |
 | P-05 | Hosting account for the Flask API (Render, Google Cloud Run, Heroku or AWS EB; the SDS allows any) | Reachable backend for physical-device testing and the jury demo | Waleed | Sprint 1 end / Sprint 4 |
 | P-06 | **Apple Developer account** (paid) *only if* iOS push notifications are a release requirement | iOS FCM needs an APNs key. Without it, iOS runs but gets no push | Afaq | Sprint 4 (iOS push) |
 
@@ -53,19 +53,20 @@ Nobody should start a feature until the items marked **Blocker** are done. Items
 - [ ] **Service account key** for the Flask backend: Project settings → Service accounts → *Generate new private key*. Store it as a secret file, never in Git.
 - [ ] Install the **Firebase CLI** (`npm i -g firebase-tools`) and run `firebase login`; used to deploy Firestore rules and indexes from `infra/firebase/`.
 
-### 1.3 Google Maps Platform APIs to enable (Google Cloud Console → APIs & Services)
+### 1.3 Geoapify maps and location APIs
 
 | API | Used for |
 |-----|----------|
-| **Maps SDK for Android** | Map screen on Android |
-| **Maps SDK for iOS** | Map screen on iOS |
-| **Places API** (use the version the Flutter plugin you choose supports) | Arena/venue search and autocomplete for manual location |
-| **Geocoding API** | Turn a manual area/address into coordinates; reverse-geocode current location |
+| **Geoapify Map Tiles API** | Map tiles displayed in the Flutter map on Android and iOS |
+| **Geoapify Places API** | Arena/venue search by category, location, or radius |
+| **Geoapify Geocoding, Autocomplete, and Reverse Geocoding APIs** | Convert a manual area/address to coordinates, suggest address matches, and resolve coordinates to a readable area |
+
+> **Provider change — 22 October 2026:** Google Maps Platform has been removed because its billing/card setup was not a fit for this FYP budget. Geoapify is the selected provider. Its Free plan currently lists 3,000 credits/day and up to 5 requests/second; map tiles and API operations consume credits, and free-plan use requires Geoapify and data-source attribution. Recheck current limits and attribution requirements before release.
 
 Setup notes:
-- Create **separate restricted keys**: one Android key (restricted to the app package + SHA-1), one iOS key (restricted to the bundle ID), and one **server key** for the Flask API (restricted by API and, where possible, IP) if the backend calls Places/Geocoding.
-- Set a **budget alert and API quotas** so a bug cannot run up charges. Document the quota limits (the SRS risk R-07 requires this).
-- Distances in the first release should be computed with the **Haversine formula** on the backend; we do **not** need the Distance Matrix or Routes API.
+- Create one Geoapify project/API key and configure it for the mobile map, Places, and geocoding requests. The key is present in app requests, so keep it out of source control and monitor usage and allowed API limits.
+- Display Geoapify and required data-source attribution with the map, including on both platforms.
+- Distances in the first release should be computed with the **Haversine formula** on the backend; we do **not** need a paid routing or distance-matrix service.
 
 ### 1.4 Developer tooling
 
@@ -136,7 +137,7 @@ Layered client–server system (SDS §1).
 | API | Flask REST API, organised by feature; versioned under `/api/v1` **[Proposed]** (SDS lists `/api/...` without version; see Section 8 note) |
 | Auth | Firebase Authentication; the API **validates Firebase ID tokens** and enforces roles |
 | Database | Cloud Firestore, accessed **only through the backend** for product operations |
-| Maps/location | Google Maps/Places/Geocoding; manual-area entry when permission is denied |
+| Maps/location | Geoapify map tiles, Places, and geocoding; manual-area entry when permission is denied |
 | Notifications | Firebase Cloud Messaging + Firestore-backed in-app notifications |
 | Recommendations | Explainable rules first (sport, distance, availability, activity, reliability); ML only if real usage history exists |
 | CI | GitHub Actions |
@@ -226,7 +227,8 @@ PORT=5000
 GOOGLE_APPLICATION_CREDENTIALS=./secrets/firebase-service-account.json
 FIREBASE_PROJECT_ID=playerszwz-dev
 # Server-side Google key (Geocoding/Places) if the backend calls them
-GOOGLE_MAPS_SERVER_KEY=changeme
+# Geoapify API key (only needed if the backend calls Geoapify; keep real values out of Git)
+GEOAPIFY_API_KEY=replace-me
 # Comma-separated origins allowed by CORS (web admin, if any)
 CORS_ORIGINS=http://localhost:3000
 # Default search radius and limits
@@ -236,8 +238,8 @@ MAX_RADIUS_KM=50
 
 ### Mobile
 
-- Android Maps key: `android/local.properties` or a Gradle secrets plugin, injected into `AndroidManifest.xml` at build time.
-- iOS Maps key: `ios/Runner/AppDelegate` via an xcconfig file excluded from Git.
+- Geoapify API key: inject with `--dart-define=GEOAPIFY_API_KEY=...`; do not hard-code it in Dart source. The mobile key is visible in client requests, so monitor quota and configure available provider restrictions.
+- The Flutter map widget loads Geoapify Map Tiles; location search and manual-area lookup use Geoapify Places/Geocoding endpoints.
 - API base URL: use `--dart-define=API_BASE_URL=...` so dev/staging/demo builds do not need code changes.
 - Android emulator reaches the host machine at `http://10.0.2.2:5000`; a physical phone needs the host's LAN IP or an ngrok/deployed URL.
 
@@ -366,7 +368,7 @@ If the team prefers to keep `/auth/register` and `/auth/login` as written in the
 | Firebase Authentication | App (SDK) and API (Admin SDK verify) | Sign-in, ID-token verification |
 | Cloud Firestore | API only | Persistence |
 | Firebase Cloud Messaging | API (Admin SDK `messaging.send`) | Push notifications |
-| Google Maps SDK (Android/iOS) | App | Map rendering |
+| Geoapify Map Tiles, Places, Geocoding, and Reverse Geocoding APIs | Flutter app | Map tiles, venue search, address lookup, and readable locations |
 | Places / Geocoding | App and/or API | Manual-area lookup, address ↔ coordinates |
 
 ---
@@ -376,6 +378,8 @@ If the team prefers to keep `/auth/register` and `/auth/login` as written in the
 Owners follow the roles in the SRS/SDS and are **suggestions** the team can change in sprint planning. Waleed: app architecture, backend integration, coordination. Afaq: frontend, maps/location, UI flows. Hassan: recommendation module, testing, documentation, QA. Story IDs refer to the SRS.
 
 ### Sprint 1 — Integration (15–29 Oct 2026, active)
+
+The map baseline uses Geoapify Map Tiles, Places, and Geocoding instead of Google Maps Platform. See Section 1.3 for the provider-change note, current quota guidance, and attribution requirements.
 
 **Goal:** connect the existing Flutter screens, current APIs, authentication/profile, and establish the personalised map baseline.
 
@@ -601,7 +605,7 @@ Per SDS §12 and risk R-06, **not** in the first release: machine-learning recom
 | R-07 | Maps/FCM limits | Budget alerts and quotas, retry logic, manual fallback |
 | R-08 | Workload imbalance | Named owners per task; weekly check-in |
 | **New** | **Secrets leaked to Git** | Section 6 rules, CI secret scan, rotate on leak |
-| **New** | **Maps billing surprise** | Budget alert and restricted keys (Section 1.3) |
+| **New** | **Geoapify free-plan limits and attribution** | Track daily credit and request limits; display required provider/data-source attribution (Section 1.3) |
 | **New** | **Late iOS push discovery** (needs APNs/paid account) | Decide D-03 and P-06 in Sprint 1 |
 | **New** | **Race conditions on last spot / last slot** | Firestore transactions + deterministic document IDs |
 
