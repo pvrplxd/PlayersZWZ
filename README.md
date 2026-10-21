@@ -46,6 +46,8 @@ The longer-term design also explores recommendations, notifications, and player 
 The two folders under `prototypes/` are demonstration apps: one validates live GPS tracking, and the other shows the planned user interface. They are not an automated test suite.
 ## 🗺️ Product architecture
 
+> **Map provider update — 22 October 2026:** We replaced Google Maps Platform with Geoapify because Google Maps billing/card setup was not a fit for this FYP budget. Geoapify's Free plan is subject to daily credits, request limits, and required map/data-source attribution; see the [current pricing](https://www.geoapify.com/pricing/) and [pricing details](https://www.geoapify.com/pricing-details/) before release.
+
 The design documents describe this planned system. The production app and backend are not included in the current repository snapshot.
 
 ```mermaid
@@ -53,7 +55,7 @@ flowchart LR
     M[Flutter mobile app] -->|HTTPS / REST| API[Flask API]
     API --> AUTH[Firebase Authentication]
     API --> DB[Cloud Firestore]
-    API --> MAPS[Maps and location services]
+    API --> MAPS[Geoapify map tiles, Places and Geocoding]
     API --> AI[Event recommendations]
     API --> PUSH[Firebase Cloud Messaging]
 ```
