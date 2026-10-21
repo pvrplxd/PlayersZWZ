@@ -396,8 +396,8 @@ The map baseline uses Geoapify Map Tiles, Places, and Geocoding instead of Googl
 | 1.7 | Flutter: Firebase init, sign-up/login/logout screens wired to Firebase, token attached to every API call by a central API client (`core/`) | Afaq |
 | 1.8 | Flutter API client: base URL via `--dart-define`, request/response models, loading/error/retry states | Afaq |
 | 1.9 | Profile: `GET/PUT /profile/{userId}`; screen for sports, availability, radius, bio, location | Afaq + Waleed |
-| 1.10 | Location: request permission; on denial show **manual area entry** (Geocoding) and still let the user continue (SRS R-01, TD-04) | Afaq |
-| 1.11 | **Map baseline:** port tracker/map code from the GPS PoC into `features/discovery/`; show user position and a placeholder layer for games | Afaq |
+| 1.10 | Location: request permission; on denial show **manual area entry** (Geoapify Geocoding/Autocomplete) and still let the user continue (SRS R-01, TD-04) | Afaq |
+| 1.11 | **Map baseline:** port tracker/map code from the GPS PoC into `features/discovery/`; show the user position over Geoapify map tiles and a placeholder layer for games | Afaq |
 | 1.12 | Firestore rules (deny direct client access) and first indexes in `infra/firebase/` | Waleed |
 | 1.13 | CI: GitHub Actions running `flutter analyze` + `flutter test` and `pytest` + `ruff`/`flake8` on every PR | Hassan |
 | 1.14 | Secrets hygiene: `.gitignore`, `.env.example`, secret scan, short README setup for each app | Hassan |
