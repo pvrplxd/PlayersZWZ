@@ -1,0 +1,10 @@
+/*
+!app
+!app/**
+!index.py
+!requirements.txt
+!.python-version
+!vercel.json
+**/__pycache__
+**/__pycache__/**
+**/*.pyc

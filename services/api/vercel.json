@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "flask",
+  "functions": {
+    "index.py": {
+      "excludeFiles": "{.env,.env.*,secrets/**,.venv/**,tests/**,**/__pycache__/**}",
+      "includeFiles": "app/**"
+    }
+  }
+}

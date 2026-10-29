@@ -1,0 +1,33 @@
+# Local credentials and environment configuration
+.env
+.env.*
+!.env.example
+**/google-services.json
+**/GoogleService-Info.plist
+**/*service-account*.json
+**/secrets/
+
+# Flutter and native build output
+**/.dart_tool/
+**/build/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/local.properties
+**/Generated.xcconfig
+**/Flutter/ephemeral/
+**/Pods/
+**/DerivedData/
+**/*.iml
+**/*.log
+
+# Python bytecode and test caches
+**/__pycache__/
+**/*.py[cod]
+
+# Local Android release staging. Publish APKs as GitHub Release assets instead.
+/Releases/Android/*.apk
+
+# Editor and OS files
+.DS_Store
+**/.idea/
+.vscode/settings.json
