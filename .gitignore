@@ -47,9 +47,6 @@ app.*.map.json
 **/__pycache__/
 **/*.py[cod]
 
-# Local Android release staging. Publish APKs as GitHub Release assets instead.
-/Releases/Android/*.apk
-
 # Editor and OS files
 .DS_Store
 **/.idea/

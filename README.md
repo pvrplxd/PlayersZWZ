@@ -4,11 +4,11 @@
 
 ### Find your players. Create a game. Get moving.
 
-**A university Final Year Project exploring personalized sports matchmaking and nearby event discovery.**
+**A university Final Year Project for personalized sports matchmaking and nearby event discovery.**
 
 [![Project](https://img.shields.io/badge/University%20FYP-PlayersZWZ-6C5CE7?style=for-the-badge)](https://github.com/pvrplxd/PlayersZWZ)
-[![Flutter demos](https://img.shields.io/badge/Flutter-Demo%20apps-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
-[![Stage](https://img.shields.io/badge/Stage-Design%20%26%20proof%20of%20concept-00A884?style=for-the-badge)](#-what-is-in-this-repository)
+[![Flutter](https://img.shields.io/badge/Flutter-Mobile%20app-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![Backend](https://img.shields.io/badge/Flask-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://vercel.com)
 
 </div>
 
@@ -18,7 +18,7 @@
 
 PlayersZWZ is designed to help people find nearby sports games and players based on their interests and location. The idea is to make organizing a match easier: discover an event, join or create a game, and find an arena.
 
-> **What this repository currently contains:** project documentation, an interactive Flutter UI prototype, and a Flutter GPS-tracking proof of concept. These demos support the project; they are not yet the complete production app and backend.
+> **What this repository contains:** the PlayersZWZ Flutter mobile app, Flask API, and supporting Flutter prototypes.
 
 ## 🎯 The product idea
 
@@ -36,19 +36,17 @@ The longer-term design also explores recommendations, notifications, and player 
 
 | Folder | What you will find |
 | --- | --- |
-| [`docs/proposal/`](docs/proposal/) | Initial proposal and proposal presentation |
-| [`docs/phase-01/`](docs/phase-01/) | Phase 1 RS Documentation |
-| [`docs/phase-02/`](docs/phase-02/) | Phase 2 RS Documentation, presentation, and software design documentation |
-| [`docs/phase-02/ui-designs/`](docs/phase-02/ui-designs/) | UI design screenshots |
-| [`prototypes/gps-tracker/`](prototypes/gps-tracker/) | Flutter proof of concept for live GPS tracking |
-| [`prototypes/ui-prototype/`](prototypes/ui-prototype/) | Click-through Flutter UI prototype |
+| [`apps/mobile/`](apps/mobile/) | PlayersZWZ Flutter mobile app |
+| [`services/api/`](services/api/) | Flask API deployed on Vercel |
+| [`prototypes/gps_tracker/`](prototypes/gps_tracker/) | Flutter proof of concept for live GPS tracking |
+| [`prototypes/ui_prototype/`](prototypes/ui_prototype/) | Click-through Flutter UI prototype |
 
 The two folders under `prototypes/` are demonstration apps: one validates live GPS tracking, and the other shows the planned user interface. They are not an automated test suite.
 ## 🗺️ Product architecture
 
 > **Map provider update — 22 October 2026:** We replaced Google Maps Platform with Geoapify because Google Maps billing/card setup was not a fit for this FYP budget. Geoapify's Free plan is subject to daily credits, request limits, and required map/data-source attribution; see the [current pricing](https://www.geoapify.com/pricing/) and [pricing details](https://www.geoapify.com/pricing-details/) before release.
 
-The design documents describe this planned system. The production app and backend are not included in the current repository snapshot.
+The mobile app communicates with the deployed API over HTTPS. Firebase provides identity and Firestore access; Geoapify provides map tiles and geocoding.
 
 ```mermaid
 flowchart LR
@@ -60,7 +58,7 @@ flowchart LR
     API --> PUSH[Firebase Cloud Messaging]
 ```
 
-## 🚀 Run the Flutter demos
+## 🧪 Explore the Flutter prototypes
 
 You need the [Flutter SDK](https://docs.flutter.dev/get-started/install) and a configured Android emulator, iOS simulator, or connected device.
 
@@ -68,7 +66,7 @@ You need the [Flutter SDK](https://docs.flutter.dev/get-started/install) and a c
 
 ```bash
 git clone https://github.com/pvrplxd/PlayersZWZ.git
-cd PlayersZWZ/prototypes/ui-prototype
+cd PlayersZWZ/prototypes/ui_prototype
 flutter pub get
 flutter run
 ```
@@ -78,22 +76,61 @@ flutter run
 From the repository root, open a separate terminal and run:
 
 ```bash
-cd prototypes/gps-tracker
+cd prototypes/gps_tracker
 flutter pub get
 flutter run
 ```
 
 The GPS demo may require location permission and its configured tracking service to be available. Follow the instructions in that app or ask the project team if setup is missing.
 
-## 📚 Project documents
+## 🛠️ Run the PlayersZWZ mobile app
 
-- [Phase 1 RS Documentation](docs/phase-01/RS-Documentation-01.pdf)
-- [Phase 2 RS Documentation](docs/phase-02/RS-Documentation-02.pdf)
-- [Phase 2 presentation](docs/phase-02/phase-02-presentation.pdf)
-- [UI prototype images](docs/phase-02/ui-designs/)
-- [Initial proposal](docs/proposal/project-proposal.pdf)
-- [Proposal presentation](docs/proposal/proposal-presentation.pdf)
-- [Software design project report](docs/phase-02/Software-Design-Documentation.docx)
+The production Flutter application is in [`apps/mobile/`](apps/mobile/). It connects to the deployed PlayersZWZ API by default, so no local environment file or backend setup is required for ordinary mobile development.
+
+### Prerequisites
+
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) on the stable channel.
+- Android Studio with the Android SDK, platform tools, and a connected Android phone or emulator.
+- Access to the PlayersZWZ Firebase project to obtain the platform configuration files.
+- Your Android debug SHA-1 and SHA-256 fingerprints registered in Firebase before testing Google Sign-In.
+
+### One-time Firebase files
+
+Download the Firebase configuration files from the PlayersZWZ Firebase project and place them locally at:
+
+```text
+apps/mobile/android/app/google-services.json
+apps/mobile/ios/Runner/GoogleService-Info.plist
+```
+
+These files are intentionally ignored by Git. Never commit or share them.
+
+### Run on Android
+
+```bash
+git clone https://github.com/pvrplxd/PlayersZWZ.git
+cd PlayersZWZ/apps/mobile
+flutter pub get
+flutter devices
+flutter run
+```
+
+Select your Android phone if Flutter asks. Google Sign-In, account setup, and the map require an internet connection to the deployed Firebase, Vercel, and Geoapify services.
+
+### Build a testing APK
+
+```bash
+cd apps/mobile
+flutter build apk --release
+```
+
+The APK is created at:
+
+```text
+build/app/outputs/flutter-apk/app-release.apk
+```
+
+Use this APK for direct tester installation. Do not commit APK files to this repository; publish tested builds as GitHub Release assets instead.
 
 ## 🧑‍🤝‍🧑 Team
 
