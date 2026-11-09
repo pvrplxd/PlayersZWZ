@@ -43,7 +43,7 @@
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to your Mac to test PlayersZWZ during local development.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Use your location to find nearby games. You can also choose an area manually.</string>
+	<string>Use your current location to find nearby games while you use PlayersZWZ.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a photo for your PlayersZWZ profile.</string>
 	<key>UIApplicationSceneManifest</key>
@@ -88,5 +88,7 @@
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Dark</string>
 </dict>
 </plist>

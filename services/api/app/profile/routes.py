@@ -2,9 +2,9 @@ from flask import Blueprint, g, jsonify, request
 from werkzeug.exceptions import BadRequest
 from ..firebase import get_firestore_client
 from ..auth.middleware import require_firebase_user
-from .service import username, validate
+from .service import username, validate, validate_preferences
 from ..auth.service import serialize_profile
-from .repository import save_profile
+from .repository import read_profile, save_preferences, save_profile
 from .photo import normalize_photo, photo_record, photo_response, MAX_REQUEST_BYTES
 import json
 
@@ -38,6 +38,34 @@ def update_profile():
         profile, code = save_profile(g.firebase_uid, details)
         if code:
             return error(code, "That username is already taken." if code == "USERNAME_TAKEN" else "Account setup is unavailable.", 409 if code == "USERNAME_TAKEN" else 403)
+        return jsonify(profile=serialize_profile(profile))
+    except Exception:
+        return error("DATABASE_UNAVAILABLE", "Could not save profile. Please retry.", 503)
+
+
+@profile_bp.get("/me/profile")
+@require_firebase_user
+def get_profile():
+    try:
+        profile = read_profile(g.firebase_uid)
+        if not profile or profile.get("setup_complete") is not True:
+            return error("PROFILE_REQUIRED", "Complete account setup before editing your profile.", 403)
+        return jsonify(profile=serialize_profile(profile))
+    except Exception:
+        return error("DATABASE_UNAVAILABLE", "Could not load profile. Please retry.", 503)
+
+
+@profile_bp.patch("/me/profile")
+@require_firebase_user
+def update_preferences():
+    try:
+        details = validate_preferences(request.get_json(silent=True))
+    except (ValueError, BadRequest):
+        return error("VALIDATION_ERROR", "Check your sports, roles, availability, radius and bio.", 400)
+    try:
+        profile, code = save_preferences(g.firebase_uid, details)
+        if code:
+            return error(code, "Complete account setup or sign in again.", 403)
         return jsonify(profile=serialize_profile(profile))
     except Exception:
         return error("DATABASE_UNAVAILABLE", "Could not save profile. Please retry.", 503)
@@ -90,3 +118,21 @@ def profile_photo():
         return response
     except Exception:
         return error("DATABASE_UNAVAILABLE", "Could not update your photo. Please retry.", 503)
+
+
+@profile_bp.put("/me/profile/home-location")
+@require_firebase_user
+def update_home_location():
+    from .service import validate_home_location
+    from .repository import save_home_location
+    try:
+        details = validate_home_location(request.get_json(silent=True))
+    except ValueError:
+        return error("VALIDATION_ERROR", "Choose a valid home location.", 400)
+    try:
+        profile, code = save_home_location(g.firebase_uid, details)
+        if code:
+            return error(code, "Complete profile setup or sign in again.", 403)
+        return jsonify(profile=serialize_profile(profile))
+    except Exception:
+        return error("DATABASE_UNAVAILABLE", "Could not save home location. Please retry.", 503)

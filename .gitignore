@@ -1,4 +1,7 @@
 # Local credentials and environment configuration
+**/key.properties
+**/*.jks
+**/*.keystore
 .env
 .env.*
 !.env.example
@@ -25,6 +28,7 @@
 **/.pub-cache/
 **/.pub/
 **/coverage/
+**/test/failures/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 **/ios/Flutter/App.framework

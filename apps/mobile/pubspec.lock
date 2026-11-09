@@ -89,14 +89,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.8"
-  cupertino_icons:
-    dependency: "direct main"
-    description:
-      name: cupertino_icons
-      sha256: "41e005c33bd814be4d3096aff55b1908d419fde52ca656c8c47719ec745873cd"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.0.9"
   dart_earcut:
     dependency: transitive
     description:
@@ -712,6 +704,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.2"
+  phosphoricons_flutter:
+    dependency: "direct main"
+    description:
+      name: phosphoricons_flutter
+      sha256: "44e70a09de3027e40484d900089a8ee20ceade0b3cb9d39b9f3be649a9eadb20"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.1.1"
   platform:
     dependency: transitive
     description:

@@ -15,12 +15,13 @@ import '../core/widgets/launch_screen.dart';
 import '../features/location/location_service.dart';
 import '../features/location/location_setup.dart';
 import '../features/discovery/explore_screen.dart';
+import 'app_theme.dart';
 
-const appBackground = Color(0xFF000000);
-const appSurface = Color(0xFF1D1D1D);
-const appAccent = Color(0xFFD7FF00);
-const appSuccess = Color(0xFF32D583);
-const appError = Color(0xFFFF6268);
+const appBackground = AppTheme.black;
+const appSurface = AppTheme.surfaceRaised;
+const appAccent = AppTheme.lime;
+const appSuccess = AppTheme.lime;
+const appError = AppTheme.destructive;
 
 class PlayersZWZApp extends StatelessWidget {
   const PlayersZWZApp({super.key});
@@ -30,16 +31,7 @@ class PlayersZWZApp extends StatelessWidget {
     return MaterialApp(
       title: 'PlayersZWZ',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: appBackground,
-        colorScheme: const ColorScheme.dark(
-          primary: appAccent,
-          surface: appSurface,
-          onPrimary: Colors.black,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.theme,
       home: const _AuthGate(),
     );
   }
@@ -137,11 +129,12 @@ class _ProfileFlow extends StatefulWidget {
   State<_ProfileFlow> createState() => _ProfileFlowState();
 }
 
-class _ProfileFlowState extends State<_ProfileFlow> {
+class _ProfileFlowState extends State<_ProfileFlow>
+    with WidgetsBindingObserver {
   late bool _complete = widget.account.profileComplete;
   late Area? _area = widget.account.area;
-  bool _editingArea = false;
   bool _reverseTransition = false;
+  bool _refreshingLocation = false;
   late final _location = LocationService(apiKey: ApiConfig.geoapifyApiKey);
   late final _api = ApiClient(
       baseUrl: ApiConfig.baseUrl,
@@ -150,12 +143,37 @@ class _ProfileFlowState extends State<_ProfileFlow> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _photo.load();
     _photo.recover();
+    if (_complete && _area != null) _refreshLiveLocation();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _complete && _area != null) {
+      _refreshLiveLocation();
+    }
+  }
+
+  Future<Area?> _refreshLiveLocation() async {
+    if (_refreshingLocation) return null;
+    _refreshingLocation = true;
+    try {
+      final area = await _location.current(requestPermission: false);
+      if (mounted) setState(() => _area = area);
+      return area;
+    } catch (_) {
+      // Keep the last known map center if location is temporarily unavailable.
+      return null;
+    } finally {
+      _refreshingLocation = false;
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _photo.dispose();
     _location.close();
     _api.close();
@@ -176,34 +194,24 @@ class _ProfileFlowState extends State<_ProfileFlow> {
           signOut: widget.signOut,
           onComplete: () => setState(() => _complete = true));
     }
-    if (_area == null || _editingArea) {
+    if (_area == null) {
       return LocationSetup(
           key: const ValueKey('location-setup'),
           api: _api,
           location: _location,
           signOut: widget.signOut,
-          onCancel: _area == null
-              ? null
-              : () => setState(() {
-                    _reverseTransition = true;
-                    _editingArea = false;
-                  }),
           onComplete: (area) => setState(() {
-                _reverseTransition = _editingArea;
                 _area = area;
-                _editingArea = false;
               }));
     }
     return ExploreScreen(
-        key: ValueKey(_area),
         area: _area!,
         photo: _photo,
         name: widget.account.name,
+        api: _api,
         apiKey: ApiConfig.geoapifyApiKey,
-        changeArea: () => setState(() {
-              _reverseTransition = false;
-              _editingArea = true;
-            }),
+        refreshLocation: _refreshLiveLocation,
+        userId: widget.user.uid,
         signOut: widget.signOut);
   }
 }

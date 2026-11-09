@@ -135,12 +135,12 @@ void main() {
     await tester.tap(find.text('Add profile photo'));
     await tester.pumpAndSettle();
     expect(requests, 0);
-    expect(find.text('Use photo'), findsNothing);
+    expect(find.text('Move and scale'), findsNothing);
     expect(controller.bytes, isNull);
   });
 
   testWidgets(
-      'selected photo requires confirmation; failure keeps preview for retry',
+      'selected photo opens the crop screen; failure keeps it open for retry',
       (tester) async {
     final data = File('test/fixtures/avatar.jpg').readAsBytesSync();
     var writes = 0;
@@ -170,16 +170,27 @@ void main() {
         home: Scaffold(
             body: ProfilePhotoEditor(controller: controller, name: 'Player'))));
     await tester.tap(find.text('Add profile photo'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    // Image decoding and cropping run outside the fake clock.
+    Future<void> settle() async {
+      for (var i = 0; i < 5; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 80)));
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+    await settle();
+    expect(find.text('Move and scale'), findsOneWidget);
     expect(writes, 0);
-    await tester.tap(find.text('Use photo'));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Could not save your photo'), findsWidgets);
+    await tester.tap(find.text('Save'));
+    await settle();
+    expect(writes, 1);
     expect(controller.bytes, isNull);
-    await tester.tap(find.text('Use photo'));
+    expect(find.text('Move and scale'), findsOneWidget);
+    await tester.tap(find.text('Save'));
+    await settle();
     await tester.pumpAndSettle();
     expect(controller.bytes, data);
-    expect(find.text('Your profile photo'), findsNothing);
+    expect(find.text('Move and scale'), findsNothing);
     expect(find.text('Change profile photo'), findsOneWidget);
   });
 }

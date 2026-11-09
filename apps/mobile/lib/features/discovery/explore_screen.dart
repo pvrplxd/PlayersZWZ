@@ -1,52 +1,378 @@
+// explore_screen.dart
 import 'dart:async';
-import 'dart:ui' as ui;
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import '../../core/widgets/platform_navigation.dart';
 import '../profile/profile_photo.dart';
-import '../profile/profile_photo_editor.dart';
 import 'map_motion.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../app/playerszwz_app.dart';
+import '../../app/app_theme.dart';
+import '../../core/api_client.dart';
 import '../location/location_service.dart';
+import '../profile/profile_preferences.dart';
+import '../../core/native/native_ui.dart';
+import '../../core/ui/pz_controls.dart';
+import '../profile/profile_screen.dart';
+import 'discovery_widgets.dart';
+import '../games/activity_screen.dart';
+import '../games/game_model.dart';
+import '../games/game_screens.dart';
+import '../games/game_service.dart';
 
 class ExploreScreen extends StatefulWidget {
-  const ExploreScreen(
-      {super.key,
-      required this.area,
-      required this.apiKey,
-      required this.changeArea,
-      required this.signOut,
-      this.tileProvider,
-      this.photo,
-      this.name = 'Player'});
+  const ExploreScreen({
+    super.key,
+    required this.area,
+    required this.apiKey,
+    this.changeArea,
+    this.refreshLocation,
+    required this.signOut,
+    this.api,
+    this.tileProvider,
+    this.photo,
+    this.name = 'Player',
+    this.userId = '',
+    this.username = '',
+  });
+
   final ProfilePhotoController? photo;
   final String name;
+  final String userId;
+  final String username;
   final Area area;
   final String apiKey;
-  final VoidCallback changeArea;
+  final VoidCallback? changeArea;
+  final Future<Area?> Function()? refreshLocation;
   final Future<void> Function() signOut;
+  final ApiClient? api;
   final TileProvider? tileProvider;
+
   @override
   State<ExploreScreen> createState() => _ExploreScreenState();
 }
 
 class _ExploreScreenState extends State<ExploreScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   final _map = MapController();
   late final MapRecenterMotion _cameraMotion;
   Timer? _timeout;
   bool _loading = true, _failed = false, _signingOut = false;
+  bool _gamesLoading = true, _loadingMore = false, _refreshingLocation = false;
+  bool _locationStale = false;
+  bool _offline = false, _radiusActive = false;
+  Timer? _offlineRetry;
+  bool _freeOnly = false, _spotsOnly = false;
+  String? _gamesError, _nextGameCursor, _selectedSport, _selectedTimeWindow;
+  double? _selectedRadius;
+  double? _draftRadius;
+  double _profileRadius = 10;
+  List<Game> _games = [];
+  int _gamesRevision = 0;
   int _attempt = 0;
-  LatLng get _center => LatLng(widget.area.latitude, widget.area.longitude);
+  int _activityRevision = 0;
+  Map<String, dynamic>? _profileSummary;
+
+  LatLng get _center => LatLng(_area.latitude, _area.longitude);
+
+  String get _locationMode =>
+      (_profileSummary?['location_mode'] as String?) ?? 'live';
+
+  Area? get _homeArea {
+    final home = _profileSummary?['home_location'];
+    if (home is! Map || home['latitude'] is! num || home['longitude'] is! num) {
+      return null;
+    }
+    return Area((home['latitude'] as num).toDouble(),
+        (home['longitude'] as num).toDouble(),
+        (_profileSummary?['home_label'] as String?) ?? 'Home', 'manual');
+  }
+
+  bool get _usingHome => _locationMode == 'home' && _homeArea != null;
+
+  /// Where games are searched from: live device location or saved home.
+  Area get _area => _usingHome ? _homeArea! : widget.area;
+
+  static String _shortLabel(String label) {
+    if (label.contains(' · ')) return label;
+    final parts = label.split(', ');
+    return parts.take(2).join(', ');
+  }
+
+  void _afterAreaChange() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (widget.apiKey.isNotEmpty) {
+        _cameraMotion.recenter(_center,
+            reducedMotion: MediaQuery.disableAnimationsOf(context),
+            targetZoom: _zoomForRadius(_radiusValue));
+      }
+      _loadGames();
+    });
+  }
+
+  void _toast(String message) => ScaffoldMessenger.of(context)
+      .showSnackBar(SnackBar(content: Text(message)));
+
+  Future<void> _setLocationMode(String mode) async {
+    final api = widget.api;
+    final profile = _profileSummary;
+    if (api == null || profile == null || mode == _locationMode) return;
+    if (mode == 'home' && _homeArea == null) {
+      await _setHomeLocation();
+      if (_homeArea == null) return;
+    }
+    final previous = _locationMode;
+    setState(() => _profileSummary = {...profile, 'location_mode': mode});
+    _afterAreaChange();
+    try {
+      final response = await api.patch('/api/v1/me/profile', body: {
+        'sports': profile['sports'] ?? const [],
+        'availability': profile['availability'] ?? const [],
+        'radius_km': (profile['radius_km'] as num?)?.round() ?? 10,
+        'bio': profile['bio'] ?? '',
+        'location_mode': mode,
+      });
+      if (mounted && response is Map && response['profile'] is Map) {
+        setState(() => _profileSummary =
+            Map<String, dynamic>.from(response['profile'] as Map));
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() =>
+          _profileSummary = {...?_profileSummary, 'location_mode': previous});
+      _afterAreaChange();
+      _toast('Could not switch location. Please retry.');
+    }
+  }
+
+  Future<void> _setHomeLocation() async {
+    final api = widget.api;
+    if (api == null) return;
+    final location = LocationService(apiKey: widget.apiKey);
+    try {
+      final area = await Navigator.of(context).push<Area>(MaterialPageRoute(
+        builder: (_) => VenueMapPickerScreen(
+            area: _homeArea ?? widget.area,
+            apiKey: widget.apiKey,
+            location: location),
+      ));
+      if (area == null || !mounted) return;
+      final response = await api.put('/api/v1/me/profile/home-location', body: {
+        'latitude': area.latitude,
+        'longitude': area.longitude,
+        'label': area.label,
+      });
+      if (mounted && response is Map && response['profile'] is Map) {
+        setState(() => _profileSummary =
+            Map<String, dynamic>.from(response['profile'] as Map));
+        if (_usingHome) _afterAreaChange();
+      }
+    } catch (_) {
+      if (mounted) _toast('Could not save your home location. Please retry.');
+    } finally {
+      location.close();
+    }
+  }
+
+  final _locationKey = GlobalKey();
+
+  Future<void> _chooseLocation() async {
+    final home = _homeArea;
+    final anchor = _locationKey.currentContext;
+    final choice = await pzMenu(
+      context,
+      anchor: anchor == null ? Rect.zero : pzRectOf(anchor),
+      title: 'Find games near',
+      selected: _usingHome ? 1 : 0,
+      actions: [
+        PzAction('Live location',
+            subtitle: _shortLabel(widget.area.label),
+            icon: PhosphorIconsFill.navigationArrow),
+        PzAction(home == null ? 'Set a default location' : 'Default location',
+            subtitle: home == null
+                ? 'Plan games near a saved place'
+                : _shortLabel(home.label),
+            icon: PhosphorIconsFill.house),
+      ],
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 0) {
+      if (_usingHome) {
+        await _setLocationMode('live');
+      } else {
+        await _refreshLocation();
+      }
+    } else {
+      await _setLocationMode('home');
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _cameraMotion = MapRecenterMotion(map: _map, vsync: this);
     _startTimeout();
+    _loadGames();
+    _loadProfileSummary();
+  }
+
+  @override
+  void didUpdateWidget(covariant ExploreScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.area.latitude != widget.area.latitude ||
+        oldWidget.area.longitude != widget.area.longitude) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _cameraMotion.recenter(_center,
+            reducedMotion: MediaQuery.disableAnimationsOf(context),
+            targetZoom: _zoomForRadius(_radiusValue));
+        _loadGames();
+      });
+    }
+  }
+
+  Future<void> _loadProfileSummary() async {
+    final api = widget.api;
+    if (api == null) return;
+    try {
+      final response = await api.get('/api/v1/me/profile');
+      if (!mounted || response is! Map || response['profile'] is! Map) return;
+      setState(() => _profileSummary =
+          Map<String, dynamic>.from(response['profile'] as Map));
+    } catch (_) {}
+  }
+
+  Future<void> _editPreferences() async {
+    final api = widget.api;
+    if (api == null) return;
+    unawaited(HapticFeedback.selectionClick());
+    final route = Theme.of(context).platform == TargetPlatform.iOS
+        ? CupertinoPageRoute<bool>(
+            builder: (_) => ProfilePreferencesScreen(api: api))
+        : MaterialPageRoute<bool>(
+            builder: (_) => ProfilePreferencesScreen(api: api));
+    final saved = await Navigator.of(context).push<bool>(route);
+    if (saved == true) _loadProfileSummary();
+  }
+
+  Future<void> _refreshLocation() async {
+    if (_refreshingLocation) return;
+    setState(() => _refreshingLocation = true);
+    try {
+      final area = await widget.refreshLocation?.call();
+      if (mounted) setState(() => _locationStale = area == null);
+      if (area == null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:
+              Text('Could not refresh your location. Showing the last one.'),
+        ));
+      }
+      await _loadGames();
+    } finally {
+      if (mounted) setState(() => _refreshingLocation = false);
+    }
+  }
+
+  Future<void> _loadGames({bool append = false}) async {
+    final api = widget.api;
+    if (api == null) return;
+    if (append && (_loadingMore || _nextGameCursor == null)) return;
+    final revision = append ? _gamesRevision : ++_gamesRevision;
+    setState(() {
+      if (append) {
+        _loadingMore = true;
+      } else {
+        _gamesLoading = true;
+        _gamesError = null;
+      }
+    });
+    try {
+      final page = await GameService(api).nearby(
+        _area,
+        sport: _selectedSport,
+        timeWindow: _selectedTimeWindow,
+        radiusKm: _selectedRadius,
+        cursor: append ? _nextGameCursor : null,
+      );
+      if (!mounted || revision != _gamesRevision) return;
+      setState(() {
+        _games = append ? [..._games, ...page.games] : page.games;
+        _profileRadius = page.radiusKm;
+        _nextGameCursor = page.nextCursor;
+        _gamesLoading = false;
+        _loadingMore = false;
+        _offline = false;
+      });
+      _offlineRetry?.cancel();
+    } on ApiException catch (error) {
+      if (mounted && revision == _gamesRevision) {
+        final offline = error.code == 'NETWORK_ERROR' || error.code == 'REQUEST_TIMEOUT';
+        if (offline) _scheduleOfflineRetry();
+        setState(() {
+          _offline = offline;
+          _gamesError = offline ? null : error.message;
+          _gamesLoading = false;
+          _loadingMore = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && revision == _gamesRevision) {
+        setState(() {
+          _gamesError =
+              'Could not load nearby games. Check your connection and retry.';
+          _gamesLoading = false;
+          _loadingMore = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _createGame() async {
+    final api = widget.api;
+    if (api == null) return;
+    final created = await showModalBottomSheet<Game>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        backgroundColor: Colors.transparent,
+        barrierColor: Colors.black.withValues(alpha: .78),
+        builder: (_) => CreateGameScreen(
+            api: api, area: _area, apiKey: widget.apiKey));
+    if (created == null || !mounted) return;
+    await _loadGames();
+    if (mounted) await _showGame(created);
+  }
+
+  Future<void> _showGame(Game game) async {
+    final api = widget.api;
+    if (api == null) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black.withValues(alpha: .5),
+      builder: (_) => GameDetailsSheet(
+        game: game,
+        service: GameService(api),
+        userId: widget.userId,
+        apiKey: widget.apiKey,
+        onChanged: () => _loadGames(),
+      ),
+    );
+    if (mounted) _loadGames();
+  }
+
+  /// While offline, quietly retry so the status flips back on its own.
+  void _scheduleOfflineRetry() {
+    _offlineRetry?.cancel();
+    _offlineRetry = Timer(const Duration(seconds: 12), () {
+      if (mounted && _offline) _loadGames();
+    });
   }
 
   void _startTimeout() {
@@ -66,6 +392,7 @@ class _ExploreScreenState extends State<ExploreScreen>
   @override
   void dispose() {
     _timeout?.cancel();
+    _offlineRetry?.cancel();
     _cameraMotion.dispose();
     _map.dispose();
     super.dispose();
@@ -99,21 +426,183 @@ class _ExploreScreenState extends State<ExploreScreen>
     _startTimeout();
   }
 
-  Future<void> _link(String url) async {
-    try {
-      if (await launchUrl(Uri.parse(url),
-          mode: LaunchMode.externalApplication)) {
-        return;
-      }
-    } catch (_) {}
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Could not open the attribution link.')));
+  void _setSport(String sport) {
+    setState(() {
+      _selectedSport = sport == 'All' ? null : sport;
+      _games = [];
+      _nextGameCursor = null;
+    });
+    _loadGames();
+  }
+
+  void _setTimeWindow(String? value) {
+    setState(() {
+      _selectedTimeWindow = value;
+      _games = [];
+      _nextGameCursor = null;
+    });
+    _loadGames();
+  }
+
+  void _setRadius(double value) {
+    setState(() {
+      _selectedRadius = value;
+      _games = [];
+      _nextGameCursor = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || widget.apiKey.isEmpty) return;
+      _cameraMotion.recenter(
+        _center,
+        reducedMotion: MediaQuery.disableAnimationsOf(context),
+        targetZoom: _zoomForRadius(value),
+      );
+    });
+    _loadGames();
+  }
+
+  double _zoomForRadius(double radiusKm) {
+    final size = MediaQuery.sizeOf(context);
+    // The circle fills ~80% of the screen width, so it stays fully visible.
+    final diameter = size.width * .8;
+    final latitudeScale = math.cos(_area.latitude * math.pi / 180).abs().clamp(.15, 1.0);
+    final metersPerPixelAtZoomZero = 156543.03392 * latitudeScale;
+    final zoom = math.log(metersPerPixelAtZoomZero * diameter / (radiusKm * 2000)) / math.ln2;
+    return zoom.clamp(9.0, 16.0).toDouble();
+  }
+
+  double get _radiusValue => (_draftRadius ?? _selectedRadius ?? _profileRadius)
+      .clamp(1.0, _maxRadius)
+      .toDouble();
+
+  static const _maxRadius = 25.0;
+
+  void _radiusExpanded() {
+    setState(() {
+      _radiusActive = true;
+      _draftRadius = _radiusValue.roundToDouble();
+    });
+  }
+
+  void _radiusChanged(double km) {
+    if (!mounted) return;
+    setState(() => _draftRadius = km);
+    if (widget.apiKey.isNotEmpty) _map.move(_center, _zoomForRadius(km));
+  }
+
+  void _radiusCollapsed(double km) {
+    if (!mounted) return;
+    final value = km.roundToDouble();
+    setState(() {
+      _draftRadius = null;
+      _radiusActive = false;
+    });
+    if (value != (_selectedRadius ?? _profileRadius).roundToDouble()) {
+      _setRadius(value);
     }
+  }
+
+  List<Game> get _visibleGames => _games.where((game) {
+        if (_freeOnly && game.feeAmount > 0) return false;
+        if (_spotsOnly && game.openSpots <= 0) return false;
+        return true;
+      }).toList(growable: false);
+
+  Future<void> _showFilters() async {
+    var draftTime = _selectedTimeWindow;
+    var draftFree = _freeOnly;
+    var draftSpots = _spotsOnly;
+    final choice = await showPzSheet<(String?, bool, bool)>(
+      context,
+      builder: (sheetContext) => StatefulBuilder(builder: (context, setSheetState) {
+        Widget toggle(String title, String subtitle, bool value, ValueChanged<bool> onChanged) => MergeSemantics(
+              child: ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(16, 4, 10, 4),
+                title: Text(title, style: AppTheme.headline),
+                subtitle: Text(subtitle, style: AppTheme.footnote),
+                trailing: Switch.adaptive(
+                  value: value,
+                  activeTrackColor: AppTheme.lime,
+                  activeThumbColor: Colors.white,
+                  onChanged: (v) {
+                    HapticFeedback.selectionClick();
+                    onChanged(v);
+                  },
+                ),
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onChanged(!value);
+                },
+              ),
+            );
+        final changed = draftTime != null || draftFree || draftSpots;
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                const Expanded(child: Text('Filters', style: AppTheme.title1)),
+                TextButton(
+                  onPressed: changed
+                      ? () => setSheetState(() {
+                            draftTime = null;
+                            draftFree = false;
+                            draftSpots = false;
+                          })
+                      : null,
+                  style: TextButton.styleFrom(foregroundColor: AppTheme.lime, disabledForegroundColor: AppTheme.muted),
+                  child: const Text('Reset', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ]),
+              const SizedBox(height: 22),
+              const PzSectionTitle('Starting'),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                for (final (value, label) in const [(null, 'Any time'), ('24h', 'Next 24 hours'), ('7d', 'Next 7 days')])
+                  PzChoicePill(label: label, selected: draftTime == value, onTap: () => setSheetState(() => draftTime = value)),
+              ]),
+              const SizedBox(height: 26),
+              const PzSectionTitle('Only show'),
+              const SizedBox(height: 12),
+              Material(
+                color: const Color(0x0DFFFFFF),
+                borderRadius: BorderRadius.circular(22),
+                clipBehavior: Clip.antiAlias,
+                child: Column(children: [
+                  toggle('Free games', 'No entry fee', draftFree, (v) => setSheetState(() => draftFree = v)),
+                  const Divider(height: 1, thickness: 1, indent: 16, color: pzLine),
+                  toggle('Games with open spots', 'Hide games that are already full', draftSpots, (v) => setSheetState(() => draftSpots = v)),
+                ]),
+              ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: () => Navigator.pop(sheetContext, (draftTime, draftFree, draftSpots)),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppTheme.lime,
+                  foregroundColor: Colors.black,
+                  minimumSize: const Size.fromHeight(56),
+                  shape: const StadiumBorder(),
+                ),
+                child: const Text('Show games'),
+              ),
+            ]),
+          ),
+        );
+      }),
+    );
+    if (choice == null || !mounted) return;
+    setState(() { _freeOnly = choice.$2; _spotsOnly = choice.$3; });
+    _setTimeWindow(choice.$1);
   }
 
   Future<void> _signOut() async {
     if (_signingOut) return;
+    final ok = await pzConfirm(context,
+        title: 'Sign out?',
+        message: 'You can sign back in any time with the same account.',
+        confirm: 'Sign out',
+        cancel: 'Cancel');
+    if (!ok || !mounted) return;
     setState(() => _signingOut = true);
     try {
       await widget.signOut();
@@ -129,29 +618,13 @@ class _ExploreScreenState extends State<ExploreScreen>
 
   int _tab = 0;
 
-  void _credits() => showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        backgroundColor: appSurface,
-        builder: (context) => SafeArea(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const ListTile(
-              title: Text('Map credits',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600))),
-          ListTile(
-              title: const Text('Powered by Geoapify'),
-              trailing: const Icon(CupertinoIcons.arrow_up_right, size: 18),
-              onTap: () => _link('https://www.geoapify.com/')),
-          ListTile(
-              title: const Text('© OpenMapTiles'),
-              trailing: const Icon(CupertinoIcons.arrow_up_right, size: 18),
-              onTap: () => _link('https://openmaptiles.org/')),
-          ListTile(
-              title: const Text('© OpenStreetMap contributors'),
-              trailing: const Icon(CupertinoIcons.arrow_up_right, size: 18),
-              onTap: () => _link('https://www.openstreetmap.org/copyright')),
-        ])),
-      );
+  /// Lifts Geoapify's dark-matter tiles so streets read without dimming.
+  static const _tileLift = ColorFilter.matrix(<double>[
+    1.15, 0, 0, 0, 6,
+    0, 1.15, 0, 0, 6,
+    0, 0, 1.15, 0, 8,
+    0, 0, 0, 1, 0,
+  ]);
 
   @override
   Widget build(BuildContext context) {
@@ -167,232 +640,417 @@ class _ExploreScreenState extends State<ExploreScreen>
             selectedIndex: _tab,
             onSelected: (index) {
               _cameraMotion.stop();
-              setState(() => _tab = index);
+              setState(() {
+                _tab = index;
+                if (index == 1) _activityRevision++;
+              });
             }),
         body: IndexedStack(index: _tab, children: [
           _explore(),
-          _destination(
-              'Activity',
-              CupertinoIcons.bolt,
-              'Make room for your next game.',
-              'Joining and hosting games will be available in a future update.'),
+          widget.api == null
+              ? _destination(
+                  'Activity',
+                  PhosphorIconsRegular.lightning,
+                  'Your games will show up here.',
+                  'Host or join a game to get started.')
+              : ActivityScreen(
+                  key: ValueKey(_activityRevision),
+                  service: GameService(widget.api!),
+                  userId: widget.userId,
+                  apiKey: widget.apiKey,
+                  bottomSpace: _navigationSpace,
+                  onCreate: _createGame),
           _destination(
               'Arenas',
-              CupertinoIcons.sportscourt,
+              PhosphorIconsRegular.mapTrifold,
               'A place for every game.',
               'Arena discovery and booking will be available in a future update.'),
-          _profile(),
+          ProfileScreen(
+            photo: widget.photo,
+            name: widget.name,
+            username: widget.username,
+            area: widget.area,
+            api: widget.api,
+            profileSummary: _profileSummary,
+            profileRadius: _profileRadius,
+            isSigningOut: _signingOut,
+            navigationSpace: _navigationSpace,
+            onEditPreferences: _editPreferences,
+            onSignOut: () => _signOut(),
+            onLocationModeChanged: widget.api == null ? null : _setLocationMode,
+            onSetHome: widget.api == null ? null : _setHomeLocation,
+          ),
         ]),
       ),
     );
   }
 
-  double get _navigationSpace =>
-      (Theme.of(context).platform == TargetPlatform.iOS ? 64 : 80) +
-      MediaQuery.viewPaddingOf(context).bottom;
+  double get _navigationSpace => PlatformNavigation.spaceOf(context) + 8;
+
+  /// Status shown in the header pill: (word, colour).
+  (String, Color) get _status {
+    const warn = Color(0xFFFFA53D);
+    if (_offline) return ('Offline', warn);
+    if (_refreshingLocation) return ('Updating', AppTheme.muted);
+    if (_usingHome) return ('Default', AppTheme.primaryText);
+    if (_locationStale) return ('No GPS', warn);
+    if (widget.area.source != 'gps') return ('Last known', warn);
+    return ('Live', AppTheme.lime);
+  }
+
+  bool get _live => _status.$1 == 'Live';
+
+  Widget _locationLine() {
+    final (status, color) = _status;
+    final label = _shortLabel(_area.label);
+    final reduce = MediaQuery.disableAnimationsOf(context);
+    return Semantics(
+      key: _locationKey,
+      button: true,
+      label: 'Searching near $label, $status. Change location',
+      excludeSemantics: true,
+      child: PzPressable(
+        onTap: widget.api == null ? null : _chooseLocation,
+        scale: .96,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            AnimatedContainer(
+              duration: reduce ? Duration.zero : const Duration(milliseconds: 250),
+              height: 24,
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: .13),
+                borderRadius: BorderRadius.circular(99),
+                border: Border.all(color: color.withValues(alpha: .22), width: .5),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                AnimatedContainer(
+                  duration: reduce ? Duration.zero : const Duration(milliseconds: 250),
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 6),
+                AnimatedSwitcher(
+                  duration: reduce ? Duration.zero : const Duration(milliseconds: 200),
+                  child: Text(status,
+                      key: ValueKey(status),
+                      style: TextStyle(
+                          fontSize: 12,
+                          height: 1,
+                          letterSpacing: 0,
+                          fontWeight: FontWeight.w600,
+                          color: color)),
+                ),
+              ]),
+            ),
+            const SizedBox(width: 9),
+            Flexible(
+              child: Text(label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 14, letterSpacing: -.15, fontWeight: FontWeight.w500,
+                      color: Color(0xE6FFFFFF))),
+            ),
+            const SizedBox(width: 3),
+            const Icon(PhosphorIconsBold.caretDown, size: 11, color: AppTheme.muted),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  bool get _filtersActive =>
+      _freeOnly || _spotsOnly || _selectedTimeWindow != null;
+
+  Future<void> _openCluster(List<Game> games, LatLng center) async {
+    final zoom = _map.camera.zoom;
+    if (zoom < 16.5) {
+      _cameraMotion.recenter(center,
+          reducedMotion: MediaQuery.disableAnimationsOf(context),
+          targetZoom: math.min(zoom + 2, 17.5));
+      return;
+    }
+    final l = MaterialLocalizations.of(context);
+    final choice = await NativeSheets.pickOption(
+      context,
+      title: '${games.length} games here',
+      options: [
+        for (final g in games)
+          NativeOption(
+              '${g.sport} · ${l.formatTimeOfDay(TimeOfDay.fromDateTime(g.startTime))}',
+              subtitle: pzSplitPlace(g.locationLabel).$1,
+              icon: SportSymbol.boldIconFor(g.sport)),
+      ],
+    );
+    if (choice != null && mounted) _showGame(games[choice]);
+  }
+
+  Future<Uint8List?> Function(GamePlayer)? _photoLoaderFor(Game game) {
+    final api = widget.api;
+    if (api == null) return null;
+    return (player) => GameService(api).playerPhoto(game.id, player.userId);
+  }
+
+  /// Game bubbles, grouped when they would overlap at the current zoom.
+  Widget _gamesLayer() => Builder(builder: (context) {
+        final camera = MapCamera.of(context);
+        final clusters = <List<Game>>[];
+        final anchors = <Offset>[];
+        for (final game in _visibleGames) {
+          final p = camera.latLngToScreenOffset(LatLng(game.latitude, game.longitude));
+          var placed = false;
+          for (var i = 0; i < clusters.length; i++) {
+            if ((p.dx - anchors[i].dx).abs() < GameMapMarker.width * .85 &&
+                (p.dy - anchors[i].dy).abs() < GameMapMarker.height * .9) {
+              clusters[i].add(game);
+              placed = true;
+              break;
+            }
+          }
+          if (!placed) {
+            clusters.add([game]);
+            anchors.add(p);
+          }
+        }
+        return MarkerLayer(markers: [
+          for (final cluster in clusters)
+            if (cluster.length == 1)
+              Marker(
+                point: LatLng(cluster.first.latitude, cluster.first.longitude),
+                width: GameMapMarker.width,
+                height: GameMapMarker.height,
+                alignment: Alignment.topCenter,
+                child: _Appear(
+                  key: ValueKey(cluster.first.id),
+                  child: GameMapMarker(
+                    game: cluster.first,
+                    loader: _photoLoaderFor(cluster.first),
+                    onTap: () => _showGame(cluster.first),
+                  ),
+                ),
+              )
+            else
+              () {
+                final center = LatLng(
+                    cluster.map((g) => g.latitude).reduce((a, b) => a + b) / cluster.length,
+                    cluster.map((g) => g.longitude).reduce((a, b) => a + b) / cluster.length);
+                return Marker(
+                  point: center,
+                  width: GameClusterMarker.width,
+                  height: GameClusterMarker.height,
+                  alignment: Alignment.topCenter,
+                  child: _Appear(
+                    key: ValueKey(cluster.map((g) => g.id).join()),
+                    child: GameClusterMarker(
+                        games: cluster, onTap: () => _openCluster(cluster, center)),
+                  ),
+                );
+              }(),
+        ]);
+      });
 
   Widget _explore() {
     final attempt = _attempt;
-    final bottom = _navigationSpace;
+    final mapReady = widget.apiKey.isNotEmpty;
+    final top = MediaQuery.paddingOf(context).top;
+    final bottom = _navigationSpace + 6;
+    final reduce = MediaQuery.disableAnimationsOf(context);
     return Stack(fit: StackFit.expand, children: [
-      Positioned.fill(
-          child: widget.apiKey.isEmpty
-              ? const Center(
-                  child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: Text(
-                          'The map is unavailable right now. Your saved area is safe.',
-                          textAlign: TextAlign.center)))
-              : FlutterMap(
-                  mapController: _map,
-                  options: MapOptions(
-                      onPositionChanged: (_, gesture) {
-                        if (gesture) _cameraMotion.stop();
-                      },
-                      initialCenter: _center,
-                      initialZoom: 16,
-                      minZoom: 3,
-                      maxZoom: 19,
-                      backgroundColor: appSurface,
-                      interactionOptions: const InteractionOptions(
-                          flags:
-                              InteractiveFlag.all & ~InteractiveFlag.rotate)),
-                  children: [
-                    TileLayer(
-                      key: ValueKey(attempt),
-                      urlTemplate:
-                          'https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=${Uri.encodeQueryComponent(widget.apiKey)}',
-                      userAgentPackageName: 'com.playerszwz.app',
-                      tileProvider: widget.tileProvider,
-                      maxNativeZoom: 20,
-                      errorTileCallback: (_, error, stack) =>
-                          _tileStatus(true, attempt),
-                      tileBuilder: (context, child, tile) => AnimatedBuilder(
-                          animation: tile,
-                          builder: (context, _) {
-                            if (tile.loadFinishedAt != null) {
-                              _tileStatus(tile.loadError, attempt);
-                            }
-                            return child;
-                          }),
-                    ),
-                    MarkerLayer(markers: [
-                      Marker(
-                          point: _center,
-                          width: 64,
-                          height: 64,
-                          child: Semantics(
-                            label: 'Saved area: ${widget.area.label}',
-                            child: const AreaMarker(),
-                          ))
-                    ]),
-                  ],
-                )),
+      Positioned.fill(child: !mapReady
+        ? const ColoredBox(color: Color(0xFF0C0C0C), child: Center(child: Text('The map is unavailable right now.', style: TextStyle(color: Colors.white54))))
+        : FlutterMap(
+            mapController: _map,
+            options: MapOptions(
+              onPositionChanged: (_, gesture) { if (gesture) _cameraMotion.stop(); },
+              initialCenter: _center, initialZoom: _zoomForRadius(_radiusValue), minZoom: 3, maxZoom: 19,
+              backgroundColor: const Color(0xFF0C0C0C),
+              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+            ),
+            children: [
+              TileLayer(
+                key: ValueKey(attempt),
+                urlTemplate: 'https://maps.geoapify.com/v1/tile/dark-matter/{z}/{x}/{y}.png?apiKey=${Uri.encodeQueryComponent(widget.apiKey)}',
+                userAgentPackageName: 'com.playerszwz.app', tileProvider: widget.tileProvider, maxNativeZoom: 20,
+                errorTileCallback: (_, error, stack) => _tileStatus(true, attempt),
+                tileBuilder: (context, child, tile) => AnimatedBuilder(animation: tile, builder: (context, _) { if (tile.loadFinishedAt != null) _tileStatus(tile.loadError, attempt); return ColorFiltered(colorFilter: _tileLift, child: child); }),
+              ),
+              // The radius ring only shows while the radius is being changed.
+              IgnorePointer(
+                child: AnimatedOpacity(
+                  opacity: _radiusActive ? 1 : 0,
+                  duration: reduce ? Duration.zero : Duration(milliseconds: _radiusActive ? 180 : 600),
+                  curve: Curves.easeOut,
+                  child: CircleLayer(circles: [CircleMarker(point: _center, radius: _radiusValue * 1000, useRadiusInMeter: true, color: appAccent.withValues(alpha: .06), borderColor: appAccent.withValues(alpha: .75), borderStrokeWidth: 1.5)]),
+                ),
+              ),
+              MarkerLayer(markers: [
+                Marker(point: _center, width: 72, height: 72, child: Semantics(label: _usingHome ? 'Your home: ${_area.label}' : 'Your location: ${_area.label}', child: AreaMarker(live: _live, home: _usingHome))),
+              ]),
+              _gamesLayer(),
+            ],
+          )),
+      // Short scrim behind the header only. It must be Positioned: this Stack
+      // uses StackFit.expand, which stretches unpositioned children (and the
+      // gradient) over the whole map.
       Positioned(
-          left: 0,
-          right: 0,
-          top: 0,
-          child: IgnorePointer(
-              child: Container(
-            height: MediaQuery.viewPaddingOf(context).top + 160,
-            decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                  Color(0xF5000000),
-                  Color(0xA6000000),
-                  Color(0x00000000)
-                ])),
-          ))),
-      SafeArea(
-          bottom: false,
-          child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 12, 20, 0),
-              child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(children: [
-                      const Expanded(
-                          child: Text('Explore',
-                              style: TextStyle(
-                                  fontSize: 34,
-                                  height: 1.15,
-                                  letterSpacing: -1.1,
-                                  fontWeight: FontWeight.w700))),
-                      ClipOval(
-                          child: BackdropFilter(
-                              filter: ui.ImageFilter.blur(
-                                  sigmaX: Theme.of(context).platform == TargetPlatform.iOS
-                                      ? 18
-                                      : 0,
-                                  sigmaY: Theme.of(context).platform ==
-                                          TargetPlatform.iOS
-                                      ? 18
-                                      : 0),
-                              child: Container(
-                                  decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color:
-                                          Colors.white.withValues(alpha: .10),
-                                      border: Border.all(
-                                          color: Colors.white
-                                              .withValues(alpha: .22))),
-                                  child: IconButton(
-                                      onPressed: widget.changeArea,
-                                      tooltip: 'Change area',
-                                      icon: const Icon(CupertinoIcons.search, size: 22),
-                                      style: IconButton.styleFrom(minimumSize: const Size(48, 48)))))),
-                    ]),
-                    const SizedBox(height: 10),
-                    Row(children: [
-                      const Icon(CupertinoIcons.location_fill,
-                          size: 13, color: appAccent),
-                      const SizedBox(width: 7),
-                      Flexible(
-                          child: Text(widget.area.label,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 15, color: Colors.white70))),
-                    ]),
-                    if (widget.apiKey.isNotEmpty && _loading)
-                      const Padding(
-                          padding: EdgeInsets.only(top: 18),
-                          child: LinearProgressIndicator(
-                              color: appAccent,
-                              backgroundColor: appSurface,
-                              minHeight: 2,
-                              semanticsLabel: 'Loading map')),
-                    if (widget.apiKey.isNotEmpty && _failed)
-                      Padding(
-                          padding: const EdgeInsets.only(top: 20),
-                          child: Material(
-                              color: appSurface,
-                              borderRadius: BorderRadius.circular(20),
-                              child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        const Text('Map could not load',
-                                            style: TextStyle(
-                                                fontSize: 17,
-                                                fontWeight: FontWeight.w600)),
-                                        const SizedBox(height: 6),
-                                        const Text(
-                                            'Check your connection and try again.',
-                                            style: TextStyle(
-                                                color: Colors.white60)),
-                                        TextButton(
-                                            onPressed: _retry,
-                                            child: const Text('Retry map')),
-                                      ])))),
-                  ]))),
-      if (widget.apiKey.isNotEmpty)
+        top: 0,
+        left: 0,
+        right: 0,
+        child: IgnorePointer(
+        child: Container(
+          height: top + 96,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xB3000000), Color(0x4D000000), Color(0x00000000)],
+              stops: [0, .6, 1],
+            ),
+          ),
+        ),
+      )),
+      Positioned(
+        top: top + 6, left: 20, right: 16,
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Semantics(
+                header: true,
+                child: Text('Explore', style: AppTheme.screenTitle(context)),
+              ),
+              const SizedBox(height: 2),
+              _locationLine(),
+            ]),
+          ),
+          if (widget.api != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: NativeGlassButton(
+                icon: PhosphorIconsBold.plus,
+                label: 'Host a game',
+                prominent: true,
+                iconSize: 19,
+                onTap: _createGame,
+              ),
+            ),
+        ]),
+      ),
+      if (widget.api != null)
         Positioned(
-            right: 20,
-            bottom: bottom + 72,
-            child: Material(
-                color: Colors.white,
-                elevation: 6,
-                shape: const CircleBorder(),
-                child: IconButton(
-                    onPressed: () => _cameraMotion.recenter(_center,
-                        reducedMotion: MediaQuery.disableAnimationsOf(context)),
-                    tooltip: 'Recenter on saved area',
-                    style:
-                        IconButton.styleFrom(minimumSize: const Size(44, 44)),
-                    icon: const Icon(Icons.my_location,
-                        size: 21, color: Color(0xFF444444))))),
-      Positioned(
-          left: 16,
-          right: 16,
-          bottom: bottom + 8,
+          top: top + (AppTheme.isCompact(context) ? 82 : 90), left: 16, right: 0,
           child: Row(children: [
+            NativeGlassButton(
+              icon: PhosphorIconsBold.slidersHorizontal,
+              label: _filtersActive ? 'Filters, on' : 'Filters',
+              prominent: _filtersActive,
+              width: 38,
+              height: 38,
+              iconSize: 16,
+              onTap: _showFilters,
+            ),
+            const SizedBox(width: 8),
             Expanded(
-                child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                          color: const Color(0xB3000000),
-                          borderRadius: BorderRadius.circular(4)),
-                      child: const Padding(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                          child: Text(
-                              'Powered by Geoapify · © OpenStreetMap · © OpenMapTiles',
-                              style: TextStyle(
-                                  fontSize: 10, color: Colors.white70))),
-                    ))),
-            IconButton(
-                onPressed: _credits,
-                tooltip: 'Map credits',
-                icon: const Icon(CupertinoIcons.info_circle,
-                    size: 18, color: Colors.white70)),
-          ])),
+              child: SizedBox(
+                height: 38,
+                child: ShaderMask(
+                  shaderCallback: (rect) => const LinearGradient(colors: [Colors.white, Colors.white, Colors.transparent], stops: [0, .88, 1]).createShader(rect),
+                  blendMode: BlendMode.dstIn,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.only(right: 24),
+                    children: [
+                      for (final sport in const ['All', 'Football', 'Cricket', 'Basketball', 'Badminton', 'Tennis', 'Skating'])
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6, top: 2, bottom: 2),
+                          child: PzChoicePill(
+                            label: sport,
+                            compact: true,
+                            selected: (_selectedSport ?? 'All') == sport,
+                            onTap: () => _setSport(sport),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      if (widget.api != null)
+        Positioned(
+          left: 16, right: 16 + 44 + 12, bottom: bottom,
+          child: NativeRadiusSlider(
+            value: _radiusValue.roundToDouble(),
+            min: 1,
+            max: _maxRadius,
+            onExpanded: _radiusExpanded,
+            onChanged: _radiusChanged,
+            onCollapsed: _radiusCollapsed,
+          ),
+        ),
+      Positioned(
+        right: 16, bottom: bottom,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          if (_games.isNotEmpty && _nextGameCursor != null && !_loadingMore) ...[
+            NativeGlassButton(
+              icon: PhosphorIconsBold.arrowDown,
+              label: 'Load more games',
+              onTap: () => _loadGames(append: true),
+            ),
+            const SizedBox(height: 10),
+          ],
+          NativeGlassButton(
+            icon: PhosphorIconsFill.navigationArrow,
+            label: _usingHome ? 'Recenter on home' : 'Recenter on my location',
+            onTap: () => _cameraMotion.recenter(_center, reducedMotion: MediaQuery.disableAnimationsOf(context), targetZoom: _zoomForRadius(_radiusValue)),
+          ),
+        ]),
+      ),
+      if (mapReady && (_loading || _failed))
+        Positioned(
+          top: MediaQuery.sizeOf(context).height * .42,
+          left: 24,
+          right: 24,
+          child: Center(
+            child: Material(
+              color: const Color(0xE8141416),
+              shape: const StadiumBorder(),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  if (_loading)
+                    const SizedBox.square(dimension: 14, child: CircularProgressIndicator(strokeWidth: 2, color: appAccent))
+                  else
+                    const Icon(PhosphorIconsRegular.warningCircle, size: 16, color: Colors.white70),
+                  const SizedBox(width: 8),
+                  Text(_failed ? 'Map unavailable' : 'Loading map…', style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                  if (_failed) TextButton(onPressed: _retry, style: TextButton.styleFrom(foregroundColor: AppTheme.lime), child: const Text('Retry')),
+                  if (!_failed) const SizedBox(width: 8),
+                ]),
+              ),
+            ),
+          ),
+        ),
+      if (_gamesError != null && !_gamesLoading)
+        Positioned(
+          top: top + (AppTheme.isCompact(context) ? 130 : 140), left: 16, right: 16,
+          child: Material(
+            color: const Color(0xF2141416),
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+              child: Row(children: [
+                const Icon(PhosphorIconsFill.warningCircle, size: 16, color: AppTheme.destructive),
+                const SizedBox(width: 10),
+                Expanded(child: Text(_gamesError!, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13))),
+                TextButton(onPressed: _loadGames, style: TextButton.styleFrom(foregroundColor: AppTheme.lime), child: const Text('Retry')),
+              ]),
+            ),
+          ),
+        ),
     ]);
   }
 
@@ -404,11 +1062,7 @@ class _ExploreScreenState extends State<ExploreScreen>
           SliverPadding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
               sliver: SliverToBoxAdapter(
-                  child: Text(title,
-                      style: const TextStyle(
-                          fontSize: 34,
-                          letterSpacing: -1,
-                          fontWeight: FontWeight.w700)))),
+                  child: Text(title, style: AppTheme.screenTitle(context)))),
           SliverFillRemaining(
               hasScrollBody: false,
               child: Padding(
@@ -428,9 +1082,9 @@ class _ExploreScreenState extends State<ExploreScreen>
                         Text(headline,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
-                                fontSize: 26,
+                                fontFamily: 'Archivo', fontSize: 24,
                                 letterSpacing: -.6,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w800,
                                 height: 1.2)),
                         const SizedBox(height: 12),
                         Text(description,
@@ -442,67 +1096,31 @@ class _ExploreScreenState extends State<ExploreScreen>
                         const SizedBox(height: 24),
                         TextButton(
                             onPressed: () => setState(() => _tab = 0),
-                            child: const Text('Explore your area')),
+                            child: const Text('Explore your area',
+                                style: TextStyle(color: appAccent))),
                       ]))),
         ]),
       );
+}
 
-  Widget _profile() => SafeArea(
-      bottom: false,
-      child: ListView(
-        padding: EdgeInsets.fromLTRB(24, 20, 24, _navigationSpace + 24),
-        children: [
-          const Text('Profile',
-              style: TextStyle(
-                  fontSize: 34,
-                  letterSpacing: -1,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 36),
-          if (widget.photo != null)
-            ProfilePhotoEditor(
-                controller: widget.photo!,
-                name: widget.name,
-                enabled: !_signingOut)
-          else
-            Center(child: ProfileAvatar(name: widget.name)),
-          const SizedBox(height: 12),
-          Text(widget.name,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -.4)),
-          const SizedBox(height: 36),
-          const Text('YOUR PLAYING AREA',
-              style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 1.4,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white54)),
-          const SizedBox(height: 12),
-          Material(
-              color: appSurface,
-              borderRadius: BorderRadius.circular(20),
-              clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                  leading: const Icon(CupertinoIcons.map_pin_ellipse,
-                      color: appAccent),
-                  title: Text(widget.area.label),
-                  subtitle: const Padding(
-                      padding: EdgeInsets.only(top: 5),
-                      child: Text('Change area',
-                          style: TextStyle(color: Colors.white54))),
-                  trailing: const Icon(CupertinoIcons.chevron_right, size: 18),
-                  onTap: widget.changeArea)),
-          const SizedBox(height: 24),
-          ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-              leading: const Icon(CupertinoIcons.square_arrow_right,
-                  color: Colors.white60),
-              title: Text(_signingOut ? 'Signing out…' : 'Sign out'),
-              onTap: _signingOut ? null : _signOut),
-        ],
-      ));
+/// Bubbles pop in with a short spring when they first appear.
+class _Appear extends StatelessWidget {
+  const _Appear({super.key, required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutBack,
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t.clamp(0.0, 1.0),
+        child: Transform.scale(
+            scale: .7 + .3 * t, alignment: Alignment.bottomCenter, child: child),
+      ),
+    );
+  }
 }

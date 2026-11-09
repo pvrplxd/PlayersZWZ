@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../auth/auth_screen.dart';
 import '../auth/auth_service.dart';
@@ -46,7 +47,7 @@ class _WelcomeFlowState extends State<WelcomeFlow> {
             child: IconButton(
               tooltip: 'Back to welcome',
               onPressed: () => setState(() => _createAccount = null),
-              icon: const Icon(Icons.arrow_back),
+              icon: const Icon(PhosphorIconsRegular.arrowLeft),
             ),
           ),
         ],

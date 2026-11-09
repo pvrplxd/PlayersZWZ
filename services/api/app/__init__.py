@@ -20,6 +20,8 @@ def create_app(config_object: type[Config] = Config) -> Flask:
     app.register_blueprint(auth_bp)
     from .profile.routes import profile_bp
     app.register_blueprint(profile_bp)
+    from .games.routes import games_bp
+    app.register_blueprint(games_bp)
 
     @app.errorhandler(404)
     def not_found(_error):

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:playerszwz/app/playerszwz_app.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:playerszwz/main.dart';
 import 'package:playerszwz/core/widgets/launch_screen.dart';
@@ -12,11 +12,15 @@ void main() {
       'signed-in launch places identity and spinner below logo without sign-out',
       (tester) async {
     await tester.pumpWidget(
-        const MaterialApp(home: LaunchScreen(identity: 'Afaq', loading: true)));
-    expect(find.text('Afaq'), findsOneWidget);
+        MaterialApp(
+            theme: ThemeData(platform: TargetPlatform.iOS),
+            home: const LaunchScreen(identity: 'Afaq', loading: true)));
+    // The plain launch screen announces the identity to screen readers only.
+    expect(find.byWidgetPredicate((w) => w is Semantics && (w.properties.label ?? '').contains('signed in as Afaq')), findsOneWidget);
     expect(find.text('Sign out'), findsNothing);
-    expect(tester.getTopLeft(find.byType(CupertinoActivityIndicator)).dy,
-        greaterThan(tester.getBottomLeft(find.byType(BrandMark)).dy));
+    await tester.pump(const Duration(milliseconds: 1500));
+    expect(tester.getCenter(find.byType(NeonSpinner)).dy,
+        greaterThan(tester.getCenter(find.byType(SvgPicture)).dy));
   });
   const ready = MaterialApp(home: Text('Ready'));
 

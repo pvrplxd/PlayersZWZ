@@ -55,3 +55,50 @@ def save_location(uid, details):
         transaction.update(profile_ref, updates)
         return {**profile, **updates}, None
     return save(db.transaction())
+
+
+def read_profile(uid):
+    profile = get_firestore_client().collection("profiles").document(uid).get().to_dict()
+    return profile
+
+
+def save_preferences(uid, details):
+    db = get_firestore_client()
+    user_ref = db.collection("users").document(uid)
+    profile_ref = db.collection("profiles").document(uid)
+
+    @firestore.transactional
+    def save(transaction):
+        user = user_ref.get(transaction=transaction).to_dict()
+        profile = profile_ref.get(transaction=transaction).to_dict()
+        if not user or not profile or profile.get("setup_complete") is not True:
+            return None, "PROFILE_REQUIRED"
+        if user.get("status") == "suspended":
+            return None, "ACCOUNT_SUSPENDED"
+        transaction.update(profile_ref, details)
+        return {**profile, **details}, None
+
+    return save(db.transaction())
+
+
+def save_home_location(uid, details):
+    db = get_firestore_client()
+    user_ref = db.collection("users").document(uid)
+    profile_ref = db.collection("profiles").document(uid)
+
+    @firestore.transactional
+    def save(transaction):
+        user = user_ref.get(transaction=transaction).to_dict()
+        profile = profile_ref.get(transaction=transaction).to_dict()
+        if not user or not profile or profile.get("setup_complete") is not True:
+            return None, "PROFILE_REQUIRED"
+        if user.get("status") == "suspended":
+            return None, "ACCOUNT_SUSPENDED"
+        updates = {
+            "home_location": firestore.GeoPoint(details["latitude"], details["longitude"]),
+            "home_label": details["label"],
+        }
+        transaction.update(profile_ref, updates)
+        return {**profile, **updates}, None
+
+    return save(db.transaction())

@@ -213,7 +213,7 @@ void main() {
     }
 
     await tester.pumpWidget(gate(load: load));
-    expect(find.text('Loading your account…'), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is Semantics && (w.properties.label ?? '').startsWith('Loading')), findsOneWidget);
     expect(find.text('Account ready'), findsNothing);
     await tester.pumpWidget(gate(load: load));
     expect(calls, 1);
@@ -275,7 +275,7 @@ void main() {
     previous.complete(account);
     await tester.pump();
     expect(find.text('Account ready'), findsNothing);
-    expect(find.text('Loading your account…'), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is Semantics && (w.properties.label ?? '').startsWith('Loading')), findsOneWidget);
     // Disposing while the current request is pending must also be safe.
     await tester.pumpWidget(const SizedBox());
     current.complete(account);

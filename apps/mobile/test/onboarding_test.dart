@@ -38,8 +38,6 @@ void main() {
       for (final name in ['welcome', 'nearby', 'arenas', 'matchmaking']) {
         await precacheImage(AssetImage('assets/onboarding/$name.png'), context);
       }
-      await precacheImage(
-          const AssetImage('assets/branding/google-icon.png'), context);
     });
     await tester.pumpAndSettle();
   }
@@ -81,7 +79,7 @@ void main() {
   testWidgets('375x667 keeps footer visible and fixed while swiping',
       (tester) async {
     await show(tester, size: const Size(375, 667));
-    final login = find.text('Log In');
+    final login = find.text('Log in');
     final before = tester.getRect(login);
     expect(before.bottom, lessThanOrEqualTo(667));
     expect(login.hitTestable(), findsOneWidget);
@@ -100,7 +98,7 @@ void main() {
     var login = 0;
     await show(tester, email: () => email++, login: () => login++);
     await tester.tap(find.text('Sign up with email'));
-    await tester.tap(find.text('Log In'));
+    await tester.tap(find.text('Log in'));
     expect(email, 1);
     expect(login, 1);
     for (var page = 0; page < 4; page++) {
@@ -155,13 +153,13 @@ void main() {
     var login = 0;
     await show(tester,
         size: const Size(320, 568), scale: 2, login: () => login++);
-    await tester.scrollUntilVisible(find.text('Log In'), 200,
+    await tester.scrollUntilVisible(find.text('Log in'), 200,
         scrollable: find
             .descendant(
                 of: find.byType(SingleChildScrollView).first,
                 matching: find.byType(Scrollable))
             .first);
-    await tester.tap(find.text('Log In'));
+    await tester.tap(find.text('Log in'));
     expect(login, 1);
     expect(tester.takeException(), isNull);
   });

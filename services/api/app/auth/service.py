@@ -63,7 +63,8 @@ def account_response(uid, user, profile):
 def serialize_profile(profile):
     from google.cloud.firestore import GeoPoint
     result = dict(profile)
-    location = result.get("location")
-    if isinstance(location, GeoPoint):
-        result["location"] = {"latitude": location.latitude, "longitude": location.longitude}
+    for key in ("location", "home_location"):
+        point = result.get(key)
+        if isinstance(point, GeoPoint):
+            result[key] = {"latitude": point.latitude, "longitude": point.longitude}
     return result

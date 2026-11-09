@@ -1,9 +1,11 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../app/app_theme.dart';
 import '../../app/playerszwz_app.dart';
 import '../auth/auth_service.dart';
 
@@ -26,9 +28,9 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   static const _pages = [
     ('Welcome\nto PlayersZWZ', 'welcome'),
-    ('Find nearby\nplayers', 'nearby'),
-    ('Book arenas\ninstantly', 'arenas'),
-    ('AI-powered\nmatchmaking', 'matchmaking'),
+    ('Find games\nnearby', 'nearby'),
+    ('Choose a place\nto play', 'arenas'),
+    ('Host or join\na game', 'matchmaking'),
   ];
   final _controller = PageController();
   int _page = 0;
@@ -103,10 +105,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 Text(_pages[index].$1,
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
-                                        fontSize: height < 700 ? 30 : 36,
-                                        height: 1.12,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -1)),
+                                        fontFamily: AppTheme.display,
+                                        fontSize: height < 700 ? 30 : 34,
+                                        height: 1.1,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: -.7)),
                                 const SizedBox(height: 8),
                                 Expanded(
                                   child: Padding(
@@ -182,21 +185,23 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         const SizedBox(height: 12),
                         _action(
                             'Sign up with email',
-                            const Icon(Icons.mail_outline, size: 24),
+                            const Icon(PhosphorIconsRegular.envelopeSimple, size: 24),
                             widget.onEmailSignUp),
                         const SizedBox(height: 10),
                         const Text('Already have an account?',
-                            style:
-                                TextStyle(color: Colors.white54, fontSize: 16)),
+                            style: TextStyle(
+                                color: AppTheme.muted,
+                                fontSize: 15,
+                                letterSpacing: -.15)),
                         SizedBox(
                             height: 48,
                             child: TextButton(
                                 onPressed: _busy ? null : widget.onLogin,
-                                child: const Text('Log In',
+                                child: const Text('Log in',
                                     style: TextStyle(
-                                        color: Colors.white,
-                                        decoration: TextDecoration.underline,
-                                        fontSize: 16)))),
+                                        color: AppTheme.lime,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600)))),
                       ])),
                   const SizedBox(height: 8),
                 ]));
@@ -219,10 +224,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             foregroundColor: Colors.white,
             disabledForegroundColor: Colors.white54,
             backgroundColor: appSurface,
-            minimumSize: const Size(48, 50),
+            minimumSize: const Size(48, 54),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16))),
+            shape: const StadiumBorder(
+                side: BorderSide(color: Color(0x14FFFFFF), width: .5))),
         child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
           icon,
           const SizedBox(width: 14),
@@ -230,7 +235,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Text(label,
                   textAlign: TextAlign.center,
                   style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w400))),
+                      fontSize: 16,
+                      letterSpacing: -.2,
+                      fontWeight: FontWeight.w600))),
         ]),
       ),
     );

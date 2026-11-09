@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import '../../core/widgets/setup_frame.dart';
-import '../../core/widgets/motion.dart';
 import 'profile_photo.dart';
 import 'profile_photo_editor.dart';
 import '../../app/playerszwz_app.dart';
@@ -48,13 +48,126 @@ class _ProfileSetupState extends State<ProfileSetup> {
 
   String? _message;
   static const _icons = {
-    'Basketball': Icons.sports_basketball_rounded,
-    'Badminton': Icons.sports_tennis_rounded,
-    'Football': Icons.sports_soccer_rounded,
-    'Skating': Icons.skateboarding_rounded,
-    'Cricket': Icons.sports_cricket_rounded,
-    'Tennis': Icons.sports_tennis_rounded,
+    'Basketball': PhosphorIconsRegular.basketball,
+    'Badminton': PhosphorIconsRegular.tennisBall,
+    'Football': PhosphorIconsRegular.soccerBall,
+    'Skating': PhosphorIconsRegular.personSimpleRun,
+    'Cricket': PhosphorIconsRegular.cricket,
+    'Tennis': PhosphorIconsRegular.tennisBall,
   };
+
+  Widget _usernameField() {
+    final suffix = _checking
+        ? const SizedBox.square(
+            dimension: 17,
+            child: CircularProgressIndicator(strokeWidth: 2))
+        : _available
+            ? const Icon(PhosphorIconsRegular.checkCircle,
+                color: appSuccess, size: 21)
+            : null;
+    if (Theme.of(context).platform == TargetPlatform.iOS) {
+      return CupertinoTextField(
+        controller: _username,
+        onChanged: _changed,
+        enabled: !_saving,
+        autocorrect: false,
+        enableSuggestions: false,
+        inputFormatters: [LengthLimitingTextInputFormatter(20)],
+        textInputAction: TextInputAction.done,
+        onSubmitted: (_) => _next(),
+        style: const TextStyle(fontSize: 17, color: Colors.white),
+        placeholder: 'Choose a username',
+        placeholderStyle: const TextStyle(color: Colors.white38),
+        prefix: const Padding(
+          padding: EdgeInsets.only(left: 16, right: 10),
+          child: Icon(PhosphorIconsRegular.at, size: 20, color: Colors.white54),
+        ),
+        suffix: suffix == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(right: 16), child: suffix),
+        padding: const EdgeInsets.symmetric(vertical: 17),
+        decoration: BoxDecoration(
+          color: appSurface,
+          borderRadius: BorderRadius.circular(17),
+          border: Border.all(
+              color: _available ? appSuccess : const Color(0x33FFFFFF)),
+        ),
+      );
+    }
+    return TextField(
+      controller: _username,
+      onChanged: _changed,
+      enabled: !_saving,
+      autocorrect: false,
+      enableSuggestions: false,
+      maxLength: 20,
+      textInputAction: TextInputAction.next,
+      onSubmitted: (_) => _next(),
+      style: const TextStyle(fontSize: 17, letterSpacing: 0),
+      decoration: setupInput(
+        'Choose a username',
+        prefix: const Icon(PhosphorIconsRegular.at,
+            size: 22, color: Colors.white54),
+        suffix: suffix == null
+            ? null
+            : Padding(padding: const EdgeInsets.all(16), child: suffix),
+      ),
+    );
+  }
+
+  Widget _sportChoice(MapEntry<String, IconData> sport) {
+    final selected = _sports.contains(sport.key);
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+    void toggle() {
+      if (_saving) return;
+      unawaited(HapticFeedback.selectionClick());
+      setState(() {
+        selected ? _sports.remove(sport.key) : _sports.add(sport.key);
+      });
+    }
+
+    if (isIOS) {
+      return Semantics(
+        selected: selected,
+        button: true,
+        child: CupertinoButton(
+          onPressed: _saving ? null : toggle,
+          minSize: 44,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          borderRadius: BorderRadius.circular(22),
+          color: selected ? appAccent : appSurface,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(sport.value,
+                size: 17, color: selected ? Colors.black : Colors.white70),
+            const SizedBox(width: 7),
+            Text(sport.key,
+                style: TextStyle(
+                    color: selected ? Colors.black : Colors.white,
+                    fontSize: 13,
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.w400)),
+          ]),
+        ),
+      );
+    }
+    return FilterChip(
+      avatar: Icon(sport.value,
+          size: 17, color: selected ? Colors.black : Colors.white70),
+      label: Text(sport.key),
+      selected: selected,
+      onSelected: _saving ? null : (_) => toggle(),
+      showCheckmark: false,
+      side: BorderSide(
+          color: selected ? appAccent : Colors.white.withValues(alpha: .15)),
+      selectedColor: appAccent,
+      backgroundColor: appSurface,
+      labelStyle: TextStyle(
+          color: selected ? Colors.black : Colors.white,
+          fontSize: 13,
+          fontWeight: selected ? FontWeight.w600 : FontWeight.w400),
+    );
+  }
 
   @override
   void dispose() {
@@ -166,7 +279,7 @@ class _ProfileSetupState extends State<ProfileSetup> {
               ? 'Saving…'
               : _step == 0
                   ? 'Next'
-                  : 'Continue',
+                  : 'Create profile',
           onBack: _step == 1 ? _back : null,
           busy: _saving,
           onContinue: (_step == 0 ? !_available : _sports.isEmpty)
@@ -189,120 +302,25 @@ class _ProfileSetupState extends State<ProfileSetup> {
                       fontWeight: FontWeight.w600,
                       color: Colors.white70)),
               const SizedBox(height: 10),
-              TextField(
-                  controller: _username,
-                  onChanged: _changed,
-                  enabled: !_saving,
-                  autocorrect: false,
-                  enableSuggestions: false,
-                  maxLength: 20,
-                  textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => _next(),
-                  style: const TextStyle(
-                      fontSize: 17,
-                      letterSpacing: 0,
-                      fontWeight: FontWeight.w400),
-                  decoration: setupInput('Choose a username',
-                      prefix: const Icon(CupertinoIcons.at,
-                          size: 22, color: Colors.white54),
-                      suffix: _checking
-                          ? const Padding(
-                              padding: EdgeInsets.all(18),
-                              child: SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2)))
-                          : _available
-                              ? const Icon(CupertinoIcons.checkmark_circle_fill,
-                                  color: appSuccess, size: 22)
-                              : null)),
+              _usernameField(),
               const SizedBox(height: 12),
               const Text(
                   'Your username is unique to you. Use 3–20 letters, numbers, dots or underscores.',
                   style: TextStyle(
                       color: Colors.white54, fontSize: 13, height: 1.5)),
-            ] else
-              LayoutBuilder(builder: (context, box) {
-                final large = MediaQuery.textScalerOf(context).scale(16) > 24;
-                return Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: _icons.entries.map((sport) {
-                      final selected = _sports.contains(sport.key);
-                      final color =
-                          selected ? appAccent : const Color(0xFFB6B6B6);
-                      return SizedBox(
-                        width: large ? box.maxWidth : (box.maxWidth - 12) / 2,
-                        child: PressFeedback(
-                            enabled: !_saving,
-                            child: Semantics(
-                                selected: selected,
-                                child: AnimatedContainer(
-                                  duration:
-                                      MediaQuery.disableAnimationsOf(context)
-                                          ? Duration.zero
-                                          : const Duration(milliseconds: 160),
-                                  curve: Curves.easeOutCubic,
-                                  decoration: BoxDecoration(
-                                      color: selected
-                                          ? const Color(0xFF222619)
-                                          : appSurface,
-                                      borderRadius: BorderRadius.circular(24),
-                                      border: Border.all(
-                                          color: selected
-                                              ? appAccent
-                                              : Colors.transparent)),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    borderRadius: BorderRadius.circular(24),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(24),
-                                      onTap: _saving
-                                          ? null
-                                          : () {
-                                              HapticFeedback.selectionClick();
-                                              setState(() {
-                                                selected
-                                                    ? _sports.remove(sport.key)
-                                                    : _sports.add(sport.key);
-                                              });
-                                            },
-                                      child: Padding(
-                                          padding: const EdgeInsets.fromLTRB(
-                                              12, 12, 12, 18),
-                                          child: Column(children: [
-                                            Align(
-                                                alignment: Alignment.topRight,
-                                                child: Icon(
-                                                    selected
-                                                        ? CupertinoIcons
-                                                            .checkmark_circle_fill
-                                                        : CupertinoIcons.circle,
-                                                    color: selected
-                                                        ? appAccent
-                                                        : Colors.white24,
-                                                    size: 17)),
-                                            sport.key == 'Badminton'
-                                                ? CustomPaint(
-                                                    size: const Size(40, 40),
-                                                    painter:
-                                                        _ShuttlePainter(color))
-                                                : Icon(sport.value,
-                                                    size: 40, color: color),
-                                            const SizedBox(height: 12),
-                                            Text(sport.key,
-                                                style: TextStyle(
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w500,
-                                                    color: color)),
-                                          ])),
-                                    ),
-                                  ),
-                                ))),
-                      );
-                    }).toList());
-              }),
+            ] else ...[
+              const Text('Sports',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white70)),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _icons.entries.map(_sportChoice).toList(),
+              ),
+            ],
             if (_message != null) ...[
               const SizedBox(height: 16),
               Semantics(
@@ -326,34 +344,3 @@ class _ProfileSetupState extends State<ProfileSetup> {
       );
 }
 
-class _ShuttlePainter extends CustomPainter {
-  const _ShuttlePainter(this.color);
-  final Color color;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-    final outline = Path()
-      ..moveTo(14, 29)
-      ..lineTo(5, 6)
-      ..quadraticBezierTo(20, 0, 35, 6)
-      ..lineTo(26, 29)
-      ..close();
-    canvas.drawPath(outline, paint);
-    canvas.drawLine(const Offset(12, 5), const Offset(17, 29), paint);
-    canvas.drawLine(const Offset(20, 4), const Offset(20, 29), paint);
-    canvas.drawLine(const Offset(28, 5), const Offset(23, 29), paint);
-    canvas.drawLine(const Offset(10, 18), const Offset(30, 18), paint);
-    paint.style = PaintingStyle.fill;
-    canvas.drawRRect(
-        RRect.fromRectAndRadius(
-            const Rect.fromLTWH(14, 28, 12, 10), const Radius.circular(5)),
-        paint);
-  }
-
-  @override
-  bool shouldRepaint(_ShuttlePainter oldDelegate) => oldDelegate.color != color;
-}

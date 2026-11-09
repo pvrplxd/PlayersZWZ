@@ -1,8 +1,10 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import '../../app/app_theme.dart';
 import '../../app/playerszwz_app.dart';
 import 'auth_service.dart';
 
@@ -141,10 +143,11 @@ class _AuthScreenState extends State<AuthScreen> {
                       isCreate ? 'Create your\naccount' : 'Login',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: compact && isCreate ? 26 : 34,
-                        fontWeight: FontWeight.w700,
-                        height: 1.12,
-                        letterSpacing: -.8,
+                        fontFamily: AppTheme.display,
+                        fontSize: compact && isCreate ? 28 : 34,
+                        fontWeight: FontWeight.w800,
+                        height: 1.1,
+                        letterSpacing: -.7,
                       ),
                     ),
                     SizedBox(height: compact && isCreate ? 12 : 34),
@@ -231,7 +234,7 @@ class _AuthScreenState extends State<AuthScreen> {
                           ? 'Already have an account?'
                           : 'Don’t have an account?',
                       style:
-                          const TextStyle(color: Colors.white54, fontSize: 15),
+                          const TextStyle(color: AppTheme.muted, fontSize: 15),
                     ),
                     TextButton(
                       onPressed: _isBusy
@@ -254,7 +257,7 @@ class _AuthScreenState extends State<AuthScreen> {
                       child: Text(
                         isCreate ? 'Log in' : 'Sign up',
                         style: const TextStyle(
-                            decoration: TextDecoration.underline),
+                            color: AppTheme.lime, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ],
@@ -333,8 +336,8 @@ class _AuthScreenState extends State<AuthScreen> {
           onPressed: _isBusy ? null : onToggle,
           color: Colors.white,
           icon: Icon(isHidden
-              ? Icons.visibility_outlined
-              : Icons.visibility_off_outlined),
+              ? PhosphorIconsRegular.eye
+              : PhosphorIconsRegular.eyeSlash),
         ),
       ),
     );
@@ -350,15 +353,15 @@ class _AuthScreenState extends State<AuthScreen> {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(19),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(19),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(19),
           borderSide: const BorderSide(color: appAccent, width: 1),
         ),
         errorBorder: OutlineInputBorder(
@@ -387,7 +390,7 @@ class _PrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 50,
+      height: 54,
       child: ElevatedButton(
         onPressed: disabled ? null : onPressed,
         style: ElevatedButton.styleFrom(
@@ -421,7 +424,7 @@ class _PrimaryButton extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.black, width: 1),
               ),
-              child: const Icon(Icons.arrow_forward, color: Colors.black),
+              child: const Icon(PhosphorIconsRegular.arrowRight, color: Colors.black),
             ),
           ],
         ),
@@ -442,7 +445,7 @@ class _GoogleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 50,
+      height: 54,
       child: TextButton.icon(
         onPressed: disabled ? null : onPressed,
         style: TextButton.styleFrom(
@@ -464,7 +467,8 @@ class _GoogleButton extends StatelessWidget {
                 excludeFromSemantics: true,
               ),
         label: const Text('Continue with Google',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w400)),
+            style: TextStyle(
+                fontSize: 16, letterSpacing: -.2, fontWeight: FontWeight.w600)),
       ),
     );
   }

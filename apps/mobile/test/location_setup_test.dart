@@ -12,7 +12,7 @@ import 'package:playerszwz/features/location/location_setup.dart';
 class TestLocations extends LocationService {
   TestLocations() : super(apiKey: '');
   @override
-  Future<Area> current() async =>
+  Future<Area> current({bool requestPermission = true}) async =>
       throw const LocationFailure('Choose an area manually.', settings: true);
   @override
   Future<List<Area>> search(String text) async =>

@@ -1,87 +1,43 @@
-import 'dart:async';
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import '../../core/widgets/setup_frame.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import 'package:flutter/material.dart';
+
 import '../../app/playerszwz_app.dart';
 import '../../core/api_client.dart';
+import '../../core/widgets/setup_frame.dart';
 import 'location_service.dart';
 
 class LocationSetup extends StatefulWidget {
-  const LocationSetup(
-      {super.key,
-      required this.api,
-      required this.location,
-      required this.onComplete,
-      required this.signOut,
-      this.onCancel});
+  const LocationSetup({
+    super.key,
+    required this.api,
+    required this.location,
+    required this.onComplete,
+    required this.signOut,
+    this.onCancel,
+  });
+
   final ApiClient api;
   final LocationService location;
   final ValueChanged<Area> onComplete;
-  final VoidCallback? onCancel;
   final Future<void> Function() signOut;
+  final VoidCallback? onCancel;
+
   @override
   State<LocationSetup> createState() => _LocationSetupState();
 }
 
 class _LocationSetupState extends State<LocationSetup> {
-  final _query = TextEditingController();
-  Timer? _timer;
-  int _revision = 0;
-  bool _busy = false, _searching = false, _settings = false;
-  String? _error;
-  List<Area>? _results;
   Area? _selected;
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _query.dispose();
-    super.dispose();
-  }
+  bool _busy = false, _settings = false;
+  String? _error;
 
-  void _search(String value) {
-    _timer?.cancel();
-    final revision = ++_revision;
-    setState(() {
-      _selected = null;
-      _results = null;
-      _error = null;
-      _settings = false;
-      _searching = value.trim().length >= 3;
-    });
-    if (!_searching) return;
-    _timer = Timer(const Duration(milliseconds: 450), () async {
-      try {
-        final results = await widget.location.search(value);
-        if (mounted && revision == _revision) {
-          setState(() => _results = results);
-        }
-      } catch (error) {
-        if (mounted && revision == _revision) {
-          setState(() => _error = _message(error));
-        }
-      } finally {
-        if (mounted && revision == _revision) {
-          setState(() => _searching = false);
-        }
-      }
-    });
-  }
-
-  String _message(Object error) => error is LocationFailure
-      ? error.message
-      : 'Could not complete that request. Check your connection and retry.';
-
-  Future<void> _gps() async {
+  Future<void> _locate() async {
     if (_busy) return;
-    _timer?.cancel();
-    ++_revision;
     setState(() {
       _busy = true;
-      _searching = false;
       _error = null;
       _settings = false;
-      _selected = null;
-      _results = null;
     });
     try {
       final area = await widget.location.current();
@@ -89,7 +45,9 @@ class _LocationSetupState extends State<LocationSetup> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error = _message(error);
+          _error = error is LocationFailure
+              ? error.message
+              : 'Could not find your location. Check Location Services and retry.';
           _settings = error is LocationFailure && error.settings;
         });
       }
@@ -98,223 +56,139 @@ class _LocationSetupState extends State<LocationSetup> {
     }
   }
 
-  Future<void> _save() async {
-    if (_busy || _selected == null) return;
+  Future<void> _continue() async {
+    if (_busy) return;
+    if (_selected == null) {
+      await _locate();
+      return;
+    }
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final response = await widget.api
-          .put('/api/v1/me/profile/location', body: _selected!.toJson());
+      final response = await widget.api.put(
+          '/api/v1/me/profile/location',
+          body: _selected!.toJson());
       if (response is! Map ||
           response['profile'] is! Map ||
-          response['profile']['location'] is! Map ||
-          response['profile']['location']['latitude'] != _selected!.latitude ||
-          response['profile']['location']['longitude'] !=
-              _selected!.longitude) {
-        throw const LocationFailure(
-            'Could not confirm your saved location. Please retry.');
+          response['profile']['location'] is! Map) {
+        throw const ApiException(0, 'INVALID_RESPONSE',
+            'Could not confirm your location. Please retry.');
       }
       if (mounted) widget.onComplete(_selected!);
-    } catch (error) {
-      if (mounted) setState(() => _error = _message(error));
+    } on ApiException catch (error) {
+      if (mounted) setState(() => _error = error.message);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Could not save your location. Please retry.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _openSettings() async {
-    try {
-      if (!await widget.location.openSettings() && mounted) {
-        setState(
-            () => _error = 'Open Settings manually to change location access.');
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(
-            () => _error = 'Could not open Settings. You can search manually.');
-      }
-    }
+    await widget.location.openSettings();
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (!didPop && !_busy) widget.onCancel?.call();
-        },
-        child: SetupFrame(
-          step: 3,
-          title: widget.onCancel == null
-              ? 'Find your\nplaying field.'
-              : 'Change your area',
-          subtitle:
-              'Choose where you play. Use your location or search for an area — access is optional.',
-          action: _busy ? 'Please wait…' : 'Confirm area',
-          onContinue: _selected == null ? null : _save,
-          onBack: widget.onCancel,
-          busy: _busy,
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+  Widget build(BuildContext context) => SetupFrame(
+        step: 3,
+        title: 'Find your\nplaying field.',
+        subtitle:
+            'Use your current location to find games nearby. We refresh it when you open the app and only use it while you’re using PlayersZWZ.',
+        action: _busy
+            ? 'Please wait…'
+            : _selected == null
+                ? 'Use my location'
+                : 'Continue',
+        onContinue: _busy ? null : _continue,
+        onBack: widget.onCancel,
+        busy: _busy,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
             Material(
-                color: appSurface,
-                borderRadius: BorderRadius.circular(22),
-                clipBehavior: Clip.antiAlias,
-                child: InkWell(
-                    onTap: _busy ? null : _gps,
-                    child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Row(children: [
-                          Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                  color: appAccent.withValues(alpha: .12),
-                                  borderRadius: BorderRadius.circular(15)),
-                              child: const Icon(CupertinoIcons.location_fill,
-                                  color: appAccent, size: 23)),
-                          const SizedBox(width: 16),
-                          const Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                Text('Use my location',
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600)),
-                                SizedBox(height: 5),
-                                Text('Find the area around you',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        color: Colors.white54,
-                                        height: 1.3)),
-                              ])),
-                          const SizedBox(width: 8),
-                          const Icon(CupertinoIcons.chevron_right,
-                              color: Colors.white38, size: 17),
-                        ])))),
-            const SizedBox(height: 28),
-            const Text('OR CHOOSE AN AREA',
-                style: TextStyle(
-                    fontSize: 11,
-                    letterSpacing: 1.4,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white54)),
-            const SizedBox(height: 14),
-            TextField(
-                controller: _query,
-                enabled: !_busy,
-                onChanged: _search,
-                textInputAction: TextInputAction.search,
-                onSubmitted: _busy ? null : _search,
-                style: const TextStyle(fontSize: 17, letterSpacing: 0),
-                decoration: setupInput('Search city or area',
-                    prefix: const Icon(CupertinoIcons.search,
-                        size: 22, color: Colors.white54))),
-            if (_searching || _busy)
-              const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 20),
-                  child: LinearProgressIndicator(
-                      color: appAccent,
-                      minHeight: 2,
-                      backgroundColor: appSurface)),
-            if (_results != null && _results!.isEmpty)
-              const Padding(
-                  padding: EdgeInsets.only(top: 20),
-                  child: Text(
-                      'No areas found. Try a nearby city or a different spelling.',
-                      style: TextStyle(color: Colors.white70, height: 1.5))),
-            if (_results != null) ...[
-              const SizedBox(height: 12),
-              for (final area in _results!)
-                Material(
-                    color: Colors.transparent,
-                    child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 8),
-                      leading: const Icon(CupertinoIcons.map_pin_ellipse,
-                          color: Colors.white54),
-                      title: Text(area.label,
-                          style: const TextStyle(fontSize: 16)),
-                      selected: identical(area, _selected),
-                      selectedColor: appAccent,
-                      trailing: Icon(
-                          identical(area, _selected)
-                              ? CupertinoIcons.checkmark_circle_fill
-                              : CupertinoIcons.chevron_right,
-                          size: 20,
-                          color: identical(area, _selected)
-                              ? appAccent
-                              : Colors.white38),
-                      onTap: _busy
-                          ? null
-                          : () {
-                              FocusScope.of(context).unfocus();
-                              setState(() => _selected = area);
-                            },
-                    )),
-              const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text('Geoapify · © OpenStreetMap contributors',
-                      style: TextStyle(fontSize: 11, color: Colors.white54))),
-            ],
-            if (_selected != null) ...[
-              const SizedBox(height: 24),
-              Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                      color: const Color(0xFF171C10),
-                      borderRadius: BorderRadius.circular(22),
-                      border:
-                          Border.all(color: appAccent.withValues(alpha: .3))),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(children: [
-                          Icon(CupertinoIcons.checkmark_circle_fill,
-                              color: appAccent, size: 18),
-                          SizedBox(width: 8),
-                          Flexible(
-                              child: Text('YOUR PLAYING AREA',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: appAccent,
-                                      letterSpacing: 1.2,
-                                      fontWeight: FontWeight.w600)))
-                        ]),
-                        const SizedBox(height: 12),
-                        Text(_selected!.label,
+              color: appSurface,
+              borderRadius: BorderRadius.circular(24),
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.all(22),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: appAccent.withValues(alpha: .12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(PhosphorIconsRegular.mapPin,
+                          color: appAccent, size: 23),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Use my location',
+                              style: TextStyle(
+                                  fontSize: 17, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 5),
+                          Text(
+                            _selected?.label ?? 'Find your current area',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w600,
-                                height: 1.3)),
-                        const SizedBox(height: 6),
-                        const Text('Ready to explore around here.',
-                            style:
-                                TextStyle(color: Colors.white54, fontSize: 14)),
-                      ])),
-            ],
+                                fontSize: 13,
+                                color: Colors.white60,
+                                height: 1.35),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_busy)
+                      const SizedBox.square(
+                          dimension: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: appAccent))
+                  ],
+                ),
+              ),
+            ),
             if (_error != null) ...[
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               Semantics(
-                  liveRegion: true,
-                  child: Text(_error!,
-                      style: const TextStyle(color: appError, height: 1.5))),
-              if (!_busy && _query.text.trim().length >= 3)
+                liveRegion: true,
+                child: Text(_error!,
+                    style: const TextStyle(color: appError, height: 1.45)),
+              ),
+              if (_settings)
                 Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton(
-                        onPressed: () => _search(_query.text),
-                        child: const Text('Retry search'))),
-            ],
-            if (_settings)
-              Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton(
-                      onPressed: _busy ? null : _openSettings,
-                      child: const Text('Open Settings'))),
-          ]),
+                    onPressed: _busy ? null : _openSettings,
+                    child: const Text('Open Settings'),
+                  ),
+                ),
+            ],
+            const SizedBox(height: 22),
+            const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(PhosphorIconsRegular.shieldCheck, size: 16, color: Colors.white54),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Your location is used to find nearby games. It is not shared as a live map with other players.',
+                    style: TextStyle(
+                        color: Colors.white54, fontSize: 13, height: 1.45),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ),
       );
 }

@@ -116,7 +116,7 @@ class _AccountSessionGateState extends State<AccountSessionGate> {
                 ] else ...[
                   const Text('Account unavailable',
                       style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.w600)),
+                          TextStyle(fontFamily: 'Archivo', fontSize: 24, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 12),
                   Text(_message(error), textAlign: TextAlign.center),
                   const SizedBox(height: 24),

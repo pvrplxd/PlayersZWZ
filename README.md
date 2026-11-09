@@ -117,6 +117,21 @@ flutter run
 
 Select your Android phone if Flutter asks. Google Sign-In, account setup, and the map require an internet connection to the deployed Firebase, Vercel, and Geoapify services.
 
+### Run on iOS
+
+Requires a Mac with **Xcode 26** or later. The app targets **iOS 26+** and uses Swift Package Manager (no CocoaPods).
+
+```bash
+cd PlayersZWZ/apps/mobile
+flutter pub get
+flutter build ios --config-only
+open ios/Runner.xcworkspace
+```
+
+Then select a simulator or your iPhone in Xcode and press Run.
+
+> **Why `--config-only`?** `flutter pub get` regenerates the plugin Swift package with Flutter's default minimum of iOS 13, but Firebase needs iOS 15+. This command raises it to the project's iOS 26 target. The Runner scheme also corrects it before each Xcode build, so you only need it once after `pub get`. If Xcode still reports "requires minimum platform version 15.0" or "No such module 'Flutter'", build once more.
+
 ### Build a testing APK
 
 ```bash
